@@ -14,6 +14,7 @@ namespace COMP2165.Clicker
         public float tensionThreshold = 5f;   // tension that triggers an event
         public float costGrowth = 0.15f;      // each extra prisoner costs this much more
         public float prisonerBaseCost = 25f;  // price of the first ordered prisoner
+          public float defaultSpeed = 50f;
  
         public int prisonersOrdered = 0;
  
@@ -106,7 +107,7 @@ namespace COMP2165.Clicker
                     if (workplaces[i].typeId == typeId)
                     {
                         Workplace gone = workplaces[i];
-                        for (int j = 0; j < gone.workers.Count; j++) unassigned.Add(gone.workers[j]);
+                        for (int j = 0; j < gone.workers.Count; j++) { gone.workers[j].travelLeft = 0; unassigned.Add(gone.workers[j]); }
                         workplaces.RemoveAt(i);
                         version++;
                         break;
@@ -152,7 +153,9 @@ namespace COMP2165.Clicker
                 else if (stat == 1) agility++;
                 else intellect++;
             }
-            return new Prisoner(faction, strength, agility, intellect);
+            Prisoner p = new Prisoner(faction, strength, agility, intellect);
+            p.speed = defaultSpeed;
+            return p;
         }
  
         // Moves a waiting prisoner into a workplace. Returns false if the workplace is full.
@@ -160,6 +163,7 @@ namespace COMP2165.Clicker
         {
             if (!place.AddPrisoner(p)) return false;
             unassigned.Remove(p);
+            p.travelLeft = p.speed > 0 ? place.distance / p.speed : 0;
             version++;
             return true;
         }
@@ -168,6 +172,7 @@ namespace COMP2165.Clicker
         public void Unassign(Prisoner p, Workplace place)
         {
             place.RemovePrisoner(p);
+            p.travelLeft = 0;
             unassigned.Add(p);
             version++;
         }
@@ -182,6 +187,7 @@ namespace COMP2165.Clicker
             {
                 total += workplaces[i].SuppliesPerSecond();
                 workplaces[i].TickTension();
+                workplaces[i].TickTravel();
             }
             return total;
         }
@@ -227,6 +233,22 @@ namespace COMP2165.Clicker
             if (text == "strength") return StatType.Strength;
             if (text == "agility") return StatType.Agility;
             return StatType.Intellect;
+        }
+
+        public void SetDistanceAll(float d)
+        {
+            for (int i = 0; i < workplaces.Count; i++) workplaces[i].distance = d;
+        }
+
+        public void SetDistance(string typeId, int index, float d)
+        {
+            int n = 0;
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                if (workplaces[i].typeId != typeId) continue;
+                if (n == index) { workplaces[i].distance = d; return; }
+                n++;
+            }
         }
     }
 }

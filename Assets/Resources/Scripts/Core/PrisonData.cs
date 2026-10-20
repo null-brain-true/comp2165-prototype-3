@@ -16,6 +16,8 @@ namespace COMP2165.Clicker
         public int strength;
         public int agility;
         public int intellect;
+        public float speed = 50f;
+        public float travelLeft = 0f;
  
         public Prisoner(Faction faction, int strength, int agility, int intellect)
         {
@@ -62,6 +64,7 @@ namespace COMP2165.Clicker
         public float baseSupplies;  // supplies per second per worker
         public int capacity;        // max prisoners inside
         public float tension;       // builds up over time
+        public float distance = 0f;   // map pixels from the HQ (display only for now)
         public List<Prisoner> workers = new List<Prisoner>();
  
         public Workplace(string name, StatType mainStat, float baseSupplies, int capacity)
@@ -107,6 +110,7 @@ namespace COMP2165.Clicker
             float total = 0;
             for (int i = 0; i < workers.Count; i++)
             {
+                if (workers[i].travelLeft > 0) continue;   // still commuting
                 total += baseSupplies + workers[i].GetStat(mainStat) * StatToSupplies;
             }
             if (AllSameFaction()) total *= SameFactionBonus;
@@ -124,6 +128,19 @@ namespace COMP2165.Clicker
         public void ResetTension()
         {
             tension = 0;
+        }
+
+        public void TickTravel()
+        {
+            for (int i = 0; i < workers.Count; i++)
+                if (workers[i].travelLeft > 0) workers[i].travelLeft -= 1f;
+        }
+
+        public int CommutingCount()
+        {
+            int n = 0;
+            for (int i = 0; i < workers.Count; i++) if (workers[i].travelLeft > 0) n++;
+            return n;
         }
     }
 }

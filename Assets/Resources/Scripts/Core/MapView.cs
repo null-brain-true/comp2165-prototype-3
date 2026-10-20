@@ -8,6 +8,8 @@ namespace COMP2165.Clicker
     public class MapView : MonoBehaviour
     {
         public RectTransform map;   // the Map object that holds the slots
+        public RectTransform hq;   // the HQ object on the map
+        public RawImage hqImage;   // the Raw Image on the HQ object
 
         class Slot
         {
@@ -16,6 +18,7 @@ namespace COMP2165.Clicker
             public Text label;
             public Image bg;
             public Color normal;
+            public RectTransform rect;
         }
 
         readonly List<Slot> slots = new List<Slot>();
@@ -45,6 +48,19 @@ namespace COMP2165.Clicker
                     s.bg.color = canTake ? new Color(1f, 0.85f, 0.3f) : s.normal;
                 }
             }
+              if (hq != null)
+            {
+                g.ResetDistance();
+                var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var s in slots)
+                {
+                    if (s.occupant == "") continue;
+                    int i; counts.TryGetValue(s.occupant, out i);
+                    g.ApplyDistance(s.occupant, i, Vector2.Distance(s.rect.anchoredPosition, hq.anchoredPosition));
+                    counts[s.occupant] = i + 1;
+                }
+            }
+            if (hqImage != null && hqImage.texture == null) hqImage.texture = g.GetImage("hq");
         }
 
         void Build()
@@ -62,6 +78,7 @@ namespace COMP2165.Clicker
                     label = b.GetComponentInChildren<Text>(true),
                     bg = b.GetComponent<Image>(),
                     normal = b.GetComponent<Image>() != null ? b.GetComponent<Image>().color : Color.white,
+                    rect = (RectTransform)marker.transform,
                 };
                 Slot captured = s;
                 b.onClick.AddListener(() => Clicked(captured));

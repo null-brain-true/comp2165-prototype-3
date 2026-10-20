@@ -175,6 +175,7 @@ namespace COMP2165.Clicker
             prison.tensionThreshold = Setting("tension_threshold", 5);
             prison.prisonerBaseCost = Setting("prisoner_base_cost", 25);
             prison.costGrowth = Setting("building_cost_growth_percent", 15) / 100f;
+            prison.defaultSpeed = Setting("prisoner_default_speed", 50);    
             foreach (var row in buildings)
             {
                 if (!prison.HasType(row.id)) { error = "Workplaces.csv has no row for building: " + row.id; yield break; }
@@ -851,6 +852,15 @@ namespace COMP2165.Clicker
         }
         public bool Ready { get { return ready; } }
         public void Notify(string message) { ShowToast(message); }
+        public void ResetDistance()
+        {
+            if (prison != null) prison.SetDistanceAll(0f);
+        }
+
+        public void ApplyDistance(string typeId, int index, float distance)
+        {
+            if (prison != null) prison.SetDistance(typeId, index, distance);
+        }
         public Texture2D GetImage(string key) { return Image(key); }
         public void CancelArmed()
         {

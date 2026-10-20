@@ -159,7 +159,8 @@ namespace COMP2165.Clicker
                 row.title.text = p.name
                     + "\n" + p.mainStat + "  " + p.workers.Count + "/" + p.capacity
                     + "\n+" + p.SuppliesPerSecond().ToString("0.0") + "/s"
-                    + "\nTension " + p.tension.ToString("0.0") + "/" + prison.tensionThreshold.ToString("0");
+                    + "\nTension " + p.tension.ToString("0.0") + "/" + prison.tensionThreshold.ToString("0")
+                    + "\nDistance " + p.distance.ToString("0") + "  Commuting " + p.CommutingCount();
                 row.action.interactable = selected != null && p.workers.Count < p.capacity;
             }
 
