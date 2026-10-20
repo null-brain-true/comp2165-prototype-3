@@ -1,0 +1,4 @@
+id,name,description,base_cost,per_second,unlock_at,image,tooltip,cost_currency,yield_currency,unlock_currency
+farm,Farm,Grow Food,10,0,0,farm,"Produces supplies, suited for prisoners with Intellect",supplies,supplies,supplies
+mine,Mine,Get Ores,10,0,0,mine,"Produces supplies, suited for prisoners with Strength",supplies,supplies,supplies
+lumber_mill,Lumber Mill,Get Wood,10,0,0,lumber_mill,"Produces supplies, suited for prisoners with Agility",supplies,supplies,supplies

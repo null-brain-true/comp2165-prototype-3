@@ -1,0 +1,6 @@
+id,name,description,cost,target_type,target_id,operation,amount,unlock_at,image,tooltip,cost_currency,unlock_currency
+better_tools,Better Tools,Increases supply output for all buildings.,500,all,,multiply,10,250,upgrade_click,Increases supply output for all buildings.,supplies,supplies
+better_hoes,Better Hoes,Increase farm output.,100,building,farm,multiply,2,0,farm.png,Increase farm output.,supplies,supplies
+better_pickaxe,Better Pickaxe,Increase mine output.,100,building,mine,multiply,2,0,mine.png,Increase mine output.,supplies,supplies
+better_axe,Better Axe,Increase lumber mill output.,100,building,lumber_mill,multiply,2,0,lumber_mill.png,Increase lumber mill output.,supplies,supplies
+strong_click,Stronger hands,Double each manual click.,100,click,,multiply,2,0,upgrade_click,Double each manual click.,supplies,supplies
