@@ -851,6 +851,7 @@ namespace COMP2165.Clicker
         }
         public bool Ready { get { return ready; } }
         public void Notify(string message) { ShowToast(message); }
+        public Texture2D GetImage(string key) { return Image(key); }
         public void CancelArmed()
         {
             if (string.IsNullOrEmpty(ArmedBuilding)) return;

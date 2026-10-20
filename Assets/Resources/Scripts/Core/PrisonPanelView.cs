@@ -136,9 +136,17 @@ namespace COMP2165.Clicker
         // Shows a prisoner: the icon is a square in their faction colour, the name is their faction.
         void ShowPrisoner(ClickerShopRow row, Prisoner p)
         {
-            row.icon.texture = null;
-            row.icon.color = FactionColor(p.faction);
+            Texture2D sprite = game.GetImage(SpriteKey(p.faction));
+            row.icon.texture = sprite;
+            row.icon.color = sprite != null ? Color.white : FactionColor(p.faction);
             row.title.text = p.faction + "\nSTR " + p.strength + "  AGI " + p.agility + "\nINT " + p.intellect;
+        }
+
+        static string SpriteKey(Faction f)
+        {
+            if (f == Faction.Republic) return "rep";
+            if (f == Faction.Imperium) return "imp";
+            return "fed";
         }
 
         // Numbers that change every second (production, tension) are updated here without rebuilding.
