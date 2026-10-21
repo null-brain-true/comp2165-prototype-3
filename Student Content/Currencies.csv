@@ -1,2 +1,5 @@
 id,name,starting_amount,click_amount
 supplies,Supplies,0,1
+wood,Wood,0,0
+planks,Planks,0,0
+food,Food,30,0

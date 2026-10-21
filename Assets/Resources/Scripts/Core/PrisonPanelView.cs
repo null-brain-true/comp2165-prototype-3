@@ -103,7 +103,7 @@ namespace COMP2165.Clicker
                 Workplace place = prison.workplaces[i];
 
                 // The ASSIGN button puts the selected prisoner into this building.
-                ClickerShopRow header = AddRow(assignedTemplate, buildingContent);
+                ClickerShopRow header = AddRow(assignedTemplate, buildingContent, 130f);
                 header.icon.texture = null;
                 header.icon.color = new Color(0.35f, 0.75f, 0.4f);
                 header.actionText.text = "ASSIGN";
@@ -124,6 +124,23 @@ namespace COMP2165.Clicker
         }
 
         // Copies the row template into a list and gives it the shop's compact layout.
+        ClickerShopRow AddRow(ClickerShopRow template, RectTransform parent, float height = 88f)
+        {
+            ClickerShopRow row = Instantiate(template, parent);
+            row.gameObject.SetActive(true);
+            row.UseCompactLayout(16);
+            if (height > 88f)
+            {
+                var rt = (RectTransform)row.transform;
+                rt.sizeDelta = new Vector2(rt.sizeDelta.x, height);
+                var le = row.GetComponent<LayoutElement>();
+                if (le != null) le.minHeight = le.preferredHeight = height;
+                var t = row.title.rectTransform;
+                t.sizeDelta = new Vector2(t.sizeDelta.x, height - 16f);
+            }
+            rows.Add(row.gameObject);
+            return row;
+        }
         ClickerShopRow AddRow(ClickerShopRow template, RectTransform parent)
         {
             ClickerShopRow row = Instantiate(template, parent);
@@ -160,7 +177,7 @@ namespace COMP2165.Clicker
                     + "\n" + p.mainStat + "  " + p.workers.Count + "/" + p.capacity
                     + "\n+" + p.SuppliesPerSecond().ToString("0.0") + "/s"
                     + "\nTension " + p.tension.ToString("0.0") + "/" + prison.tensionThreshold.ToString("0")
-                    + "\nDistance " + p.distance.ToString("0") + "  Commuting " + p.CommutingCount();
+                    + "\nDist " + p.distance.ToString("0") + "  Commute " + p.CommutingCount();
                 row.action.interactable = selected != null && p.workers.Count < p.capacity;
             }
 

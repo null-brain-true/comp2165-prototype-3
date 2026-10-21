@@ -2,3 +2,5 @@ id,main_stat,base_supplies,capacity
 farm,Intellect,1,3
 mine,Strength,1,3
 lumber_mill,Agility,1,3
+workshop,Agility,1,3
+watchtower,Strength,1,2

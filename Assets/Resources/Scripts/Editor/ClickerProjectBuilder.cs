@@ -15,7 +15,7 @@ namespace COMP2165.Clicker.Editor
 {
     public static class ClickerProjectBuilder
     {
-        static readonly string[] SheetNames = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio" };
+        static readonly string[] SheetNames = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio", "Workplaces" };
         static string Root { get { return Directory.GetParent(Application.dataPath).FullName; } }
         static string ScenePath
         {

@@ -1,13 +1,13 @@
 using System.Collections.Generic;
- 
+
 namespace COMP2165.Clicker
 {
     // The three prisoner factions.
     public enum Faction { Republic, Imperium, Federacy }
- 
+
     // The three prisoner stats (more can be added later).
     public enum StatType { Strength, Agility, Intellect }
- 
+
     // One prisoner. Plain class, like a Java class with public fields.
     // Stats are whole numbers, at least 1 each. Together they add up to the total set in Settings.csv.
     public class Prisoner
@@ -18,7 +18,7 @@ namespace COMP2165.Clicker
         public int intellect;
         public float speed = 50f;
         public float travelLeft = 0f;
- 
+
         public Prisoner(Faction faction, int strength, int agility, int intellect)
         {
             this.faction = faction;
@@ -26,7 +26,7 @@ namespace COMP2165.Clicker
             this.agility = agility;
             this.intellect = intellect;
         }
- 
+
         // Look up one stat by its type.
         public int GetStat(StatType stat)
         {
@@ -38,7 +38,7 @@ namespace COMP2165.Clicker
             }
         }
     }
- 
+
     // How one kind of building behaves with prisoners (loaded from Workplaces.csv).
     // The id matches a row in Buildings.csv.
     public class BuildingType
@@ -48,7 +48,7 @@ namespace COMP2165.Clicker
         public float baseSupplies;  // supplies per second per worker
         public int capacity;        // max prisoners inside each one
     }
- 
+
     // One building the player has bought, where prisoners are assigned to work.
     public class Workplace
     {
@@ -57,7 +57,7 @@ namespace COMP2165.Clicker
         const float MixedFactionPenalty = 0.9f;
         const float StatToSupplies = 0.1f;
         const float TensionPerWorkerPerSecond = 0.05f;
- 
+
         public string name;
         public string typeId;       // which building type (the id in Buildings.csv) this one is
         public StatType mainStat;   // the stat that decides how well prisoners work here
@@ -66,7 +66,7 @@ namespace COMP2165.Clicker
         public float tension;       // builds up over time
         public float distance = 0f;   // map pixels from the HQ (display only for now)
         public List<Prisoner> workers = new List<Prisoner>();
- 
+
         public Workplace(string name, StatType mainStat, float baseSupplies, int capacity)
         {
             this.name = name;
@@ -74,19 +74,19 @@ namespace COMP2165.Clicker
             this.baseSupplies = baseSupplies;
             this.capacity = capacity;
         }
- 
+
         public bool AddPrisoner(Prisoner p)
         {
             if (workers.Count >= capacity) return false;
             workers.Add(p);
             return true;
         }
- 
+
         public void RemovePrisoner(Prisoner p)
         {
             workers.Remove(p);
         }
- 
+
         // True if there are 2 or more workers and they all share one faction.
         public bool AllSameFaction()
         {
@@ -97,14 +97,14 @@ namespace COMP2165.Clicker
             }
             return true;
         }
- 
+
         // True if there are 2 or more workers and at least two factions.
         public bool MixedFactions()
         {
             if (workers.Count < 2) return false;
             return !AllSameFaction();
         }
- 
+
         public float SuppliesPerSecond()
         {
             float total = 0;
@@ -117,14 +117,15 @@ namespace COMP2165.Clicker
             if (MixedFactions()) total *= MixedFactionPenalty;
             return total;
         }
- 
+
         // Call once per second. Only same-faction buildings build tension.
-        public void TickTension()
+        public void TickTension(bool starving = false)
         {
-            if (!AllSameFaction()) return;
-            tension += workers.Count * TensionPerWorkerPerSecond;
+            if (workers.Count == 0) return;
+            if (!starving && !AllSameFaction()) return;   // normally only same-faction buildings build tension
+            tension += workers.Count * TensionPerWorkerPerSecond * (starving ? 3f : 1f);
         }
- 
+
         public void ResetTension()
         {
             tension = 0;

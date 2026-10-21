@@ -40,6 +40,7 @@ namespace COMP2165.Clicker
         PrisonPanelView prisonView;
         MapView mapView;
         public string ArmedBuilding = "";
+        bool wasStarving;
         readonly Dictionary<string, Color> rowColors = new Dictionary<string, Color>();
         ClickerCanvasView ui;
         ClickerTooltip shopTooltip;
@@ -175,12 +176,13 @@ namespace COMP2165.Clicker
             prison.tensionThreshold = Setting("tension_threshold", 5);
             prison.prisonerBaseCost = Setting("prisoner_base_cost", 25);
             prison.costGrowth = Setting("building_cost_growth_percent", 15) / 100f;
-            prison.defaultSpeed = Setting("prisoner_default_speed", 50);    
+            prison.defaultSpeed = Setting("prisoner_default_speed", 50);
             foreach (var row in buildings)
             {
                 if (!prison.HasType(row.id)) { error = "Workplaces.csv has no row for building: " + row.id; yield break; }
             }
             LoadProgress();
+            LoadPrison();
             music = gameObject.AddComponent<AudioSource>();
             music.loop = true;
             music.volume = Mathf.Clamp01(Setting("music_volume", 0.45f));
@@ -324,6 +326,7 @@ namespace COMP2165.Clicker
                 manager.Tick();
                 for (int i = 0; i < buildings.Count; i++)
                 { var asset = buildingAssets[buildings[i].id]; var value = asset.YieldAmount; value.Amount = originals[i]; asset.YieldAmount = value; }
+                EatFood();
                 float made = prison.Tick() * Multiplier;
                 manager.State.CurrencyCurrentTotals[currency] = Balance(currency) + made;
                 manager.State.CurrencyHistoricalTotals[currency] = Historical(currency) + made;
@@ -361,6 +364,18 @@ namespace COMP2165.Clicker
                 source.Amount = row.clickAmount;
             }
             PlaySound("click");
+        }
+
+        void EatFood()
+        {
+            Currency food;
+            if (!currencyAssets.TryGetValue("food", out food)) { prison.starving = false; return; }
+            float need = prison.PrisonerCount() * Setting("food_per_prisoner", 0.1f);
+            float have = Balance(food);
+            prison.starving = need > 0 && have < need;
+            manager.State.CurrencyCurrentTotals[food] = Mathf.Max(0, have - need);
+            if (prison.starving && !wasStarving) ShowToast("Food has run out! The prisoners are getting restless.");
+            wasStarving = prison.starving;
         }
 
         int BuildingCount(BuildingData row)
@@ -469,6 +484,7 @@ namespace COMP2165.Clicker
             { int count; manager.State.EarnedBuildings.TryGetValue(buildingAssets[row.id], out count); save.buildings.Add(new BuildingSave { id = row.id, count = count }); }
             foreach (var row in upgrades) if (manager.State.EarnedUpgrades.Contains(upgradeAssets[row.id])) save.upgrades.Add(row.id);
             PlayerPrefs.SetString("COMP2165_" + Label("game_id", "clicker"), JsonUtility.ToJson(save));
+            if (prison != null) PlayerPrefs.SetString("COMP2165_" + Label("game_id", "clicker") + "_prison", prison.Serialize());
             PlayerPrefs.Save();
         }
 
@@ -498,6 +514,15 @@ namespace COMP2165.Clicker
                 foreach (string id in save.upgrades) if (upgradeAssets.ContainsKey(id)) manager.State.EarnedUpgrades.Add(upgradeAssets[id]);
             }
             catch (Exception ex) { Debug.LogWarning("Could not load saved progress: " + ex.Message); }
+        }
+
+        void LoadPrison()
+        {
+            string text = PlayerPrefs.GetString("COMP2165_" + Label("game_id", "clicker") + "_prison", "");
+            if (string.IsNullOrEmpty(text)) return;
+            // Workplaces are normally created in Update(), so create them now so workers have somewhere to go.
+            foreach (var row in buildings) prison.SyncWorkplaces(row.id, row.name, BuildingCount(row));
+            prison.Load(text);
         }
 
         void OnApplicationPause(bool paused) { if (paused && ready) SaveProgress(); }
@@ -852,6 +877,7 @@ namespace COMP2165.Clicker
         }
         public bool Ready { get { return ready; } }
         public void Notify(string message) { ShowToast(message); }
+        public PrisonManager Prison { get { return prison; } }
         public void ResetDistance()
         {
             if (prison != null) prison.SetDistanceAll(0f);
@@ -925,6 +951,15 @@ namespace COMP2165.Clicker
             PlaySound("buy");
             SaveProgress();
             return true;
+        }
+
+        public float RefundFor(string id)
+        {
+            var row = FindBuilding(id);
+            if (row == null) return 0;
+            int count = BuildingCount(row);
+            if (count < 1) return 0;
+            return (float)((int)row.cost * Math.Pow(1 + manager.Config.BuildingCostIncrease, count - 1) * sellRefund);
         }
     }
 }
