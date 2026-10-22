@@ -17,6 +17,8 @@ namespace COMP2165.Clicker
         public float costGrowth = 0.15f;      // each extra prisoner costs this much more
         public float prisonerBaseCost = 25f;  // price of the first ordered prisoner
         public float defaultSpeed = 50f;
+        public string guardTypeId = "watchtower";
+        public string foodId = "food";   // starvation never cuts food output, so a famine can recover
         public bool starving = false;        // set each second by ClickerGame
         public float starvePenalty = 0.5f;   // production multiplier while starving
 
@@ -99,6 +101,8 @@ namespace COMP2165.Clicker
                 have++;
                 Workplace w = new Workplace(displayName + " " + have, t.mainStat, t.baseSupplies, t.capacity);
                 w.typeId = typeId;
+                w.yieldCurrency = t.yieldCurrency;
+                w.isGuard = typeId.ToLower() == guardTypeId.ToLower();
                 workplaces.Add(w);
                 version++;
             }
@@ -183,17 +187,25 @@ namespace COMP2165.Clicker
 
         // ----- Every second -----
 
-        // Call once per second. Returns the supplies produced this second.
-        public float Tick()
+        // Call once per second. Returns the amount produced this second, per currency id.
+        public Dictionary<string, float> Tick()
         {
-            float total = 0;
+            Dictionary<string, float> output = new Dictionary<string, float>();
             for (int i = 0; i < workplaces.Count; i++)
             {
-                total += workplaces[i].SuppliesPerSecond();
-                workplaces[i].TickTension(starving);
-                workplaces[i].TickTravel();
+                Workplace w = workplaces[i];
+                float made = w.SuppliesPerSecond();
+                if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
+                if (made > 0)
+                {
+                    float have;
+                    output.TryGetValue(w.yieldCurrency, out have);
+                    output[w.yieldCurrency] = have + made;
+                }
+                w.TickTension(starving);
+                w.TickTravel();
             }
-            return starving ? total * starvePenalty : total;
+            return output;
         }
 
         // Returns the first workplace whose tension is over the threshold, or null if none.
@@ -258,6 +270,34 @@ namespace COMP2165.Clicker
                 if (n == index) { workplaces[i].distance = d; return; }
                 n++;
             }
+        }
+
+        public void SetGuardAll(float f)
+        {
+            for (int i = 0; i < workplaces.Count; i++) workplaces[i].guardFactor = f;
+        }
+
+        public void SetGuard(string typeId, int index, float f)
+        {
+            int n = 0;
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                if (workplaces[i].typeId != typeId) continue;
+                if (n == index) { workplaces[i].guardFactor = f; return; }
+                n++;
+            }
+        }
+
+        public float GuardPower(string typeId, int index)
+        {
+            int n = 0;
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                if (workplaces[i].typeId != typeId) continue;
+                if (n == index) return workplaces[i].GuardPower();
+                n++;
+            }
+            return 0;
         }
 
         // ----- Saving -----
@@ -360,6 +400,40 @@ namespace COMP2165.Clicker
                 }
             }
             version++;
+        }
+        public void SetTypeYield(string typeId, string currencyId)
+        {
+            BuildingType t = FindType(typeId);
+            if (t != null) t.yieldCurrency = currencyId;
+        }
+
+        // Share of this building type's buildings that have someone working inside (0 to 1)
+        public float StaffedFraction(string typeId)
+        {
+            int total = 0, staffed = 0;
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                if (workplaces[i].typeId != typeId) continue;
+                total++;
+                if (workplaces[i].IsStaffed()) staffed++;
+            }
+            return total == 0 ? 0f : (float)staffed / total;
+        }
+
+        public Dictionary<string, float> OutputPerSecond()
+        {
+            Dictionary<string, float> output = new Dictionary<string, float>();
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                Workplace w = workplaces[i];
+                float made = w.SuppliesPerSecond();
+                if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
+                if (made <= 0) continue;
+                float have;
+                output.TryGetValue(w.yieldCurrency, out have);
+                output[w.yieldCurrency] = have + made;
+            }
+            return output;
         }
     }
 }

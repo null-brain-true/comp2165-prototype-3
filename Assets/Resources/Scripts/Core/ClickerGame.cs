@@ -41,6 +41,9 @@ namespace COMP2165.Clicker
         MapView mapView;
         public string ArmedBuilding = "";
         bool wasStarving;
+        float nextRaid, hqDefense, hqHealth = 100f;
+        int raidsDone;
+        bool gameOver, won;
         readonly Dictionary<string, Color> rowColors = new Dictionary<string, Color>();
         ClickerCanvasView ui;
         ClickerTooltip shopTooltip;
@@ -181,6 +184,7 @@ namespace COMP2165.Clicker
             {
                 if (!prison.HasType(row.id)) { error = "Workplaces.csv has no row for building: " + row.id; yield break; }
             }
+            foreach (var row in buildings) prison.SetTypeYield(row.id, row.yieldCurrency);
             LoadProgress();
             LoadPrison();
             music = gameObject.AddComponent<AudioSource>();
@@ -200,6 +204,8 @@ namespace COMP2165.Clicker
             nextEvent = Time.time + eventInterval;
             nextGold = Time.time + goldInterval;
             nextSave = Time.time + 15;
+            nextRaid = Time.time + Setting("raid_first_seconds", 150);
+            hqHealth = Setting("hq_max_health", 100);
             shopTooltip = ClickerTooltip.Ensure(ui);
             ClickerPalette.Apply(ui, loaded["Palette"]);
             ready = true;
@@ -313,6 +319,7 @@ namespace COMP2165.Clicker
                 if (ui != null && ui.loadingText != null) ui.loadingText.text = error ?? "Loading game data...";
                 return;
             }
+            if (gameOver) return;
             for (int i = eventBoostEnds.Count - 1; i >= 0; i--) if (Time.time >= eventBoostEnds[i]) eventBoostEnds.RemoveAt(i);
             if (Time.time >= nextTick)
             {
@@ -321,15 +328,20 @@ namespace COMP2165.Clicker
                 foreach (var row in buildings)
                 {
                     var asset = buildingAssets[row.id]; originals.Add(asset.YieldAmount.Amount);
-                    var value = asset.YieldAmount; value.Amount *= Multiplier; asset.YieldAmount = value;
+                    var value = asset.YieldAmount; value.Amount *= Multiplier * prison.StaffedFraction(row.id); asset.YieldAmount = value;
                 }
                 manager.Tick();
                 for (int i = 0; i < buildings.Count; i++)
                 { var asset = buildingAssets[buildings[i].id]; var value = asset.YieldAmount; value.Amount = originals[i]; asset.YieldAmount = value; }
                 EatFood();
-                float made = prison.Tick() * Multiplier;
-                manager.State.CurrencyCurrentTotals[currency] = Balance(currency) + made;
-                manager.State.CurrencyHistoricalTotals[currency] = Historical(currency) + made;
+                foreach (var pair in prison.Tick())
+                {
+                    Currency target;
+                    if (!currencyAssets.TryGetValue(pair.Key, out target)) target = currency;   // unknown or blank: supplies
+                    float made = pair.Value * Multiplier;
+                    manager.State.CurrencyCurrentTotals[target] = Balance(target) + made;
+                    manager.State.CurrencyHistoricalTotals[target] = Historical(target) + made;
+                }
 
                 Workplace angry = prison.FindAngryWorkplace();
                 if (angry != null && events.Count > 0)
@@ -346,6 +358,7 @@ namespace COMP2165.Clicker
             if (Time.time >= nextGold && !goldVisible)
             { goldVisible = true; nextGold = Time.time + goldInterval; }
             if (Time.time >= nextSave) { SaveProgress(); nextSave = Time.time + 15; }
+            if (Time.time >= nextRaid) { Raid(); nextRaid = Time.time + Setting("raid_interval_seconds", 120); }
             foreach (var row in buildings) prison.SyncWorkplaces(row.id, row.name, BuildingCount(row));
             RefreshCanvas();
             if (prisonView != null) prisonView.Refresh(this, prison);
@@ -855,7 +868,10 @@ namespace COMP2165.Clicker
             {
                 var building = owned.Key;
                 if (building.YieldAmount.Currency != asset) continue;
-                total += building.YieldAmount.Amount * owned.Value * Multiplier;
+                string bid = null;
+                foreach (var pair in buildingAssets) if (pair.Value == building) { bid = pair.Key; break; }
+                float staffed = (bid == null || prison == null) ? 1f : prison.StaffedFraction(bid);
+                total += building.YieldAmount.Amount * owned.Value * Multiplier * staffed;
                 foreach (var upgrade in manager.State.EarnedUpgrades)
                 {
                     foreach (var perk in upgrade.UpgradePerk)
@@ -877,6 +893,93 @@ namespace COMP2165.Clicker
         }
         public bool Ready { get { return ready; } }
         public void Notify(string message) { ShowToast(message); }
+        public void SetHqDefense(float d) { hqDefense = d; }
+        public bool GameOver { get { return gameOver; } }
+
+        public string RaidStatus()
+        {
+            if (gameOver) return won ? "VICTORY! The camp held." : "HQ DESTROYED";
+            float eta = Mathf.Max(0, nextRaid - Time.time);
+            float next = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
+            return "Next raid in " + eta.ToString("0") + "s (strength " + next.ToString("0.0") + ")"
+                + "\nDefense " + hqDefense.ToString("0.00")
+                + "   HQ " + hqHealth.ToString("0") + "/" + Setting("hq_max_health", 100).ToString("0")
+                + "   Raids " + raidsDone + "/" + (int)Setting("raids_to_win", 5);
+        }
+
+        void Raid()
+        {
+            raidsDone++;
+            float strength = Setting("raid_base_strength", 0.6f) + (raidsDone - 1) * Setting("raid_growth", 0.3f);
+            float gap = Mathf.Max(0, strength - hqDefense);
+            if (gap <= 0)
+            {
+                ShowToast("Raid " + raidsDone + " repelled!");
+            }
+            else
+            {
+                float frac = Mathf.Clamp01(gap / strength);   // how much of the raid got through
+                float loss = frac * Setting("raid_loss_percent", 30) / 100f;
+                foreach (var def in currencyDefinitions)
+                {
+                    var asset = currencyAssets[def.id];
+                    manager.State.CurrencyCurrentTotals[asset] = Balance(asset) * (1f - loss);
+                }
+                hqHealth -= frac * Setting("raid_damage", 34);
+                ShowToast("Raid " + raidsDone + " broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles.");
+            }
+            if (hqHealth <= 0) { gameOver = true; won = false; }
+            else if (raidsDone >= (int)Setting("raids_to_win", 5)) { gameOver = true; won = true; }
+        }
+        public ClickerTooltip Tooltip { get { return shopTooltip; } }
+        public int CurrencyCount { get { return currencyDefinitions.Count; } }
+        public string CurrencyId(int i) { return currencyDefinitions[i].id; }
+        public string CurrencyName(int i) { return currencyDefinitions[i].name; }
+        public string AmountText(int i) { return Format(Balance(currencyAssets[currencyDefinitions[i].id])); }
+        public bool IsStarving { get { return prison != null && prison.starving; } }
+
+        public string RateTooltip(int i)
+        {
+            var def = currencyDefinitions[i];
+            float fromBuildings = PerSecond(currencyAssets[def.id]);
+            float fromPrisoners = 0, eaten = 0;
+            if (prison != null)
+            {
+                foreach (var pair in prison.OutputPerSecond())
+                {
+                    bool known = currencyAssets.ContainsKey(pair.Key);
+                    if (pair.Key.Equals(def.id, StringComparison.OrdinalIgnoreCase) || (!known && i == 0))
+                        fromPrisoners += pair.Value * Multiplier;   // blank or unknown output goes to the first currency
+                }
+                if (def.id.Equals("food", StringComparison.OrdinalIgnoreCase))
+                    eaten = prison.PrisonerCount() * Setting("food_per_prisoner", 0.1f);
+            }
+            float net = fromBuildings + fromPrisoners - eaten;
+            var sb = new StringBuilder();
+            sb.Append(def.name).Append("\n").Append(net >= 0 ? "+" : "").Append(Format(net)).Append("/s");
+            sb.Append("\nBuildings: +").Append(Format(fromBuildings));
+            sb.Append("\nPrisoners: +").Append(Format(fromPrisoners));
+            if (eaten > 0) sb.Append("\nEaten: -").Append(Format(eaten));
+            if (Multiplier > 1.01f) sb.Append("\nBoost x").Append(Format(Multiplier)).Append(" active");
+            return sb.ToString();
+        }
+        public float GuardRadius { get { return Setting("guard_radius", 250); } }
+
+        public void ResetGuard()
+        {
+            if (prison != null) prison.SetGuardAll(1f);
+        }
+
+        public float GuardPowerOf(string typeId, int index)
+        {
+            return prison == null ? 0 : prison.GuardPower(typeId, index);
+        }
+
+        public void ApplyGuard(string typeId, int index, float power)
+        {
+            if (prison == null) return;
+            prison.SetGuard(typeId, index, Mathf.Max(0.1f, 1f - power));
+        }
         public PrisonManager Prison { get { return prison; } }
         public void ResetDistance()
         {

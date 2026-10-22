@@ -3,4 +3,4 @@ farm,Farm,Grow Food,10,1,0,farm,Grows food for camp,supplies,food,supplies
 mine,Mine,Get Ores,10,0,0,mine,"Produces supplies, suited for prisoners with Strength",supplies,supplies,supplies
 lumber_mill,Lumber Mill,Get Wood,10,1,0,lumber_mill,"Produces supplies, suited for prisoners with Agility",supplies,wood,supplies
 workshop,Workshop,Turn timber into supplies,40,1,0,,Turn timber into planks,wood,planks,wood
-watchtower,Watchtower,Guards the camp,30,3,0,,Guards the camp,planks,supplies,planks
+watchtower,Watchtower,Guards the camp,30,0,0,,Guards the camp,planks,supplies,planks

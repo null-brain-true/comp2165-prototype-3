@@ -141,14 +141,6 @@ namespace COMP2165.Clicker
             rows.Add(row.gameObject);
             return row;
         }
-        ClickerShopRow AddRow(ClickerShopRow template, RectTransform parent)
-        {
-            ClickerShopRow row = Instantiate(template, parent);
-            row.gameObject.SetActive(true);
-            row.UseCompactLayout(16);
-            rows.Add(row.gameObject);
-            return row;
-        }
 
         // Shows a prisoner: the icon is a square in their faction colour, the name is their faction.
         void ShowPrisoner(ClickerShopRow row, Prisoner p)
@@ -177,7 +169,9 @@ namespace COMP2165.Clicker
                     + "\n" + p.mainStat + "  " + p.workers.Count + "/" + p.capacity
                     + "\n+" + p.SuppliesPerSecond().ToString("0.0") + "/s"
                     + "\nTension " + p.tension.ToString("0.0") + "/" + prison.tensionThreshold.ToString("0")
-                    + "\nDist " + p.distance.ToString("0") + "  Commute " + p.CommutingCount();
+                    + "\nDist " + p.distance.ToString("0") + "  Commute " + p.CommutingCount()
+                    + (p.isGuard ? "\nGuard power " + p.GuardPower().ToString("0.00") : "")
+                    + (!p.isGuard && !p.IsStaffed() ? "\nIDLE: no workers" : "");
                 row.action.interactable = selected != null && p.workers.Count < p.capacity;
             }
 

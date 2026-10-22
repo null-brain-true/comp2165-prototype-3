@@ -47,6 +47,7 @@ namespace COMP2165.Clicker
         public StatType mainStat;   // the stat that decides how well prisoners work here
         public float baseSupplies;  // supplies per second per worker
         public int capacity;        // max prisoners inside each one
+        public string yieldCurrency = "";   // the currency workers here produce
     }
 
     // One building the player has bought, where prisoners are assigned to work.
@@ -57,6 +58,8 @@ namespace COMP2165.Clicker
         const float MixedFactionPenalty = 0.9f;
         const float StatToSupplies = 0.1f;
         const float TensionPerWorkerPerSecond = 0.05f;
+        const float GuardPerWorker = 0.15f;
+        const float GuardPerStrength = 0.03f;
 
         public string name;
         public string typeId;       // which building type (the id in Buildings.csv) this one is
@@ -64,6 +67,9 @@ namespace COMP2165.Clicker
         public float baseSupplies;  // supplies per second per worker
         public int capacity;        // max prisoners inside
         public float tension;       // builds up over time
+        public float guardFactor = 1f;   // 1 = unprotected, lower = better protected
+        public bool isGuard;             // true for guard towers
+        public string yieldCurrency = "";   // the currency this building's workers produce
         public float distance = 0f;   // map pixels from the HQ (display only for now)
         public List<Prisoner> workers = new List<Prisoner>();
 
@@ -107,6 +113,7 @@ namespace COMP2165.Clicker
 
         public float SuppliesPerSecond()
         {
+            if (isGuard) return 0;
             float total = 0;
             for (int i = 0; i < workers.Count; i++)
             {
@@ -121,9 +128,9 @@ namespace COMP2165.Clicker
         // Call once per second. Only same-faction buildings build tension.
         public void TickTension(bool starving = false)
         {
-            if (workers.Count == 0) return;
+            if (isGuard || workers.Count == 0) return;
             if (!starving && !AllSameFaction()) return;   // normally only same-faction buildings build tension
-            tension += workers.Count * TensionPerWorkerPerSecond * (starving ? 3f : 1f);
+            tension += workers.Count * TensionPerWorkerPerSecond * (starving ? 3f : 1f) * guardFactor;
         }
 
         public void ResetTension()
@@ -142,6 +149,25 @@ namespace COMP2165.Clicker
             int n = 0;
             for (int i = 0; i < workers.Count; i++) if (workers[i].travelLeft > 0) n++;
             return n;
+        }
+
+        public bool IsStaffed()
+        {
+            for (int i = 0; i < workers.Count; i++)
+                if (workers[i].travelLeft <= 0) return true;   // someone has arrived and is working
+            return false;
+        }
+
+        public float GuardPower()
+        {
+            if (!isGuard) return 0;
+            float total = 0;
+            for (int i = 0; i < workers.Count; i++)
+            {
+                if (workers[i].travelLeft > 0) continue;   // still walking there
+                total += GuardPerWorker + workers[i].strength * GuardPerStrength;
+            }
+            return total;
         }
     }
 }

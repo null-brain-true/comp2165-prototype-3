@@ -24,6 +24,7 @@ namespace COMP2165.Clicker
         public float wanderRadius = 45f;   // how far from the building centre they roam (map pixels)
         public float wanderSpeed = 25f;    // map pixels per second
         public RawImage hqImage;   // the Raw Image on the HQ object
+        public string guardBuilding = "watchtower";   // the building id that guards others
         public GameObject confirmPanel;   // the Sell Confirm panel (starts switched off)
         public Text confirmText;
         public Button confirmYes, confirmNo;
@@ -78,6 +79,32 @@ namespace COMP2165.Clicker
                     counts[s.occupant] = i + 1;
                 }
             }
+            g.ResetGuard();
+            var idxOf = new Dictionary<Slot, int>();
+            var typeSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var towerPower = new Dictionary<Slot, float>();
+            foreach (var s in slots)
+            {
+                if (s.occupant == "") continue;
+                int idx; typeSeen.TryGetValue(s.occupant, out idx);
+                typeSeen[s.occupant] = idx + 1;
+                idxOf[s] = idx;
+                if (string.Equals(s.occupant, guardBuilding, StringComparison.OrdinalIgnoreCase))
+                    towerPower[s] = g.GuardPowerOf(s.occupant, idx);
+            }
+            foreach (var s in slots)
+            {
+                if (s.occupant == "") continue;
+                float power = 0;
+                foreach (var t in towerPower)
+                    if (t.Key != s && Vector2.Distance(CenterInMap(s.rect), CenterInMap(t.Key.rect)) <= g.GuardRadius) power += t.Value;
+                g.ApplyGuard(s.occupant, idxOf[s], power);
+            }
+            float hqDefense = 0;
+            if (hq != null)
+                foreach (var t in towerPower)
+                    if (Vector2.Distance(CenterInMap(hq), CenterInMap(t.Key.rect)) <= g.GuardRadius) hqDefense += t.Value;
+            g.SetHqDefense(hqDefense);
             if (hqImage != null && hqImage.texture == null) hqImage.texture = g.GetImage("hq");
             if (hq != null && walkerTemplate != null) UpdateWalkers(g);
         }
