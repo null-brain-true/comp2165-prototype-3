@@ -28,6 +28,12 @@ namespace COMP2165.Clicker
         public RectTransform enemySpawn; // where enemies appear
         public float enemySpeed = 60f;   // map pixels per second
         readonly List<RawImage> enemies = new List<RawImage>();
+        readonly List<float> enemyHealth = new List<float>();
+        readonly List<Text> enemyLabels = new List<Text>();
+        Dictionary<Slot, float> activeTowers = new Dictionary<Slot, float>();
+        Dictionary<Slot, int> activeGuards = new Dictionary<Slot, int>();
+        public float enemyHealthMax = 3f;   // health of each raider
+        public float towerDamage = 5f;      // damage per second = tower power x this
         public string guardBuilding = "watchtower";   // the building id that guards others
         public GameObject confirmPanel;   // the Sell Confirm panel (starts switched off)
         public Text confirmText;
@@ -87,6 +93,7 @@ namespace COMP2165.Clicker
             var idxOf = new Dictionary<Slot, int>();
             var typeSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var towerPower = new Dictionary<Slot, float>();
+            var towerGuards = new Dictionary<Slot, int>();
             foreach (var s in slots)
             {
                 if (s.occupant == "") continue;
@@ -94,7 +101,10 @@ namespace COMP2165.Clicker
                 typeSeen[s.occupant] = idx + 1;
                 idxOf[s] = idx;
                 if (string.Equals(s.occupant, guardBuilding, StringComparison.OrdinalIgnoreCase))
+                {
                     towerPower[s] = g.GuardPowerOf(s.occupant, idx);
+                    towerGuards[s] = WorkersAt(g.Prison, s.occupant, idx);
+                }
             }
             foreach (var s in slots)
             {
@@ -104,6 +114,8 @@ namespace COMP2165.Clicker
                     if (t.Key != s && Vector2.Distance(CenterInMap(s.rect), CenterInMap(t.Key.rect)) <= g.GuardRadius) power += t.Value;
                 g.ApplyGuard(s.occupant, idxOf[s], power);
             }
+            activeTowers = towerPower;
+            activeGuards = towerGuards;
             float hqDefense = 0;
             if (hq != null)
                 foreach (var t in towerPower)
@@ -235,25 +247,80 @@ namespace COMP2165.Clicker
                 img.texture = game.GetImage("monster");
                 img.color = img.texture != null ? Color.white : Color.red;
                 enemies.Add(img);
+                enemyHealth.Add(enemyHealthMax);
+                enemyLabels.Add(img.GetComponentInChildren<Text>(true));
             }
         }
 
         void MoveEnemies()
         {
             Vector2 target = CenterInMap(hq);
-            for (int i = enemies.Count - 1; i >= 0; i--)
+
+            // 1. Move everyone
+            for (int i = 0; i < enemies.Count; i++)
             {
                 var rt = enemies[i].rectTransform;
                 rt.anchoredPosition = Vector2.MoveTowards(rt.anchoredPosition, target, enemySpeed * Time.deltaTime);
-                if (Vector2.Distance(rt.anchoredPosition, target) < 5f)
+            }
+
+            // 2. Each tower hits one enemy per guard (the closest ones in range)
+            foreach (var t in activeGuards)
+            {
+                Vector2 towerPos = CenterInMap(t.Key.rect);
+                var chosen = new List<int>();
+                for (int shot = 0; shot < t.Value; shot++)
                 {
-                    Destroy(enemies[i].gameObject);
-                    enemies.RemoveAt(i);
-                    game.RaiderArrived();
+                    int best = -1;
+                    float bestDist = game.GuardRadius;
+                    for (int i = 0; i < enemies.Count; i++)
+                    {
+                        if (chosen.Contains(i)) continue;
+                        float d = Vector2.Distance(enemies[i].rectTransform.anchoredPosition, towerPos);
+                        if (d <= bestDist) { bestDist = d; best = i; }
+                    }
+                    if (best == -1) break;   // nobody left in range
+                    chosen.Add(best);
+                    enemyHealth[best] -= towerDamage * Time.deltaTime;
                 }
+            }
+
+            // 3. Update labels, remove the dead and the arrived
+            for (int i = enemies.Count - 1; i >= 0; i--)
+            {
+                if (enemyLabels[i] != null)
+                    enemyLabels[i].text = Mathf.CeilToInt(Mathf.Max(0, enemyHealth[i])) + "/" + Mathf.CeilToInt(enemyHealthMax);
+
+                bool dead = enemyHealth[i] <= 0;
+                bool arrived = Vector2.Distance(enemies[i].rectTransform.anchoredPosition, target) < 5f;
+                if (!dead && !arrived) continue;
+
+                Destroy(enemies[i].gameObject);
+                enemies.RemoveAt(i);
+                enemyHealth.RemoveAt(i);
+                enemyLabels.RemoveAt(i);
+                if (dead) game.RaiderKilled();
+                else game.RaiderArrived();
             }
         }
 
+        // How many guards have arrived and are working in the Nth building of this type
+        int WorkersAt(PrisonManager prison, string typeId, int index)
+        {
+            if (prison == null) return 0;
+            int n = 0;
+            foreach (var w in prison.workplaces)
+            {
+                if (!w.typeId.Equals(typeId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (n == index)
+                {
+                    int ready = 0;
+                    foreach (var p in w.workers) if (p.travelLeft <= 0) ready++;   // still walking = not guarding yet
+                    return ready;
+                }
+                n++;
+            }
+            return 0;
+        }
         Vector2 CenterInMap(RectTransform r)
         {
             Vector3 local = map.InverseTransformPoint(r.TransformPoint(r.rect.center));

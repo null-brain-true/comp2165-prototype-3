@@ -46,6 +46,7 @@ namespace COMP2165.Clicker
         bool gameOver, won;
         bool raidActive;
         int raidersLeft;
+        int raidersTotal, raidersThrough;
         readonly Dictionary<string, Color> rowColors = new Dictionary<string, Color>();
         ClickerCanvasView ui;
         ClickerTooltip shopTooltip;
@@ -206,7 +207,7 @@ namespace COMP2165.Clicker
             nextEvent = Time.time + eventInterval;
             nextGold = Time.time + goldInterval;
             nextSave = Time.time + 15;
-            nextRaid = Time.time + Setting("raid_first_seconds", 10);
+            nextRaid = Time.time + Setting("raid_first_seconds", 60);
             hqHealth = Setting("hq_max_health", 100);
             shopTooltip = ClickerTooltip.Ensure(ui);
             ClickerPalette.Apply(ui, loaded["Palette"]);
@@ -913,27 +914,41 @@ namespace COMP2165.Clicker
         void StartRaid()
         {
             float strength = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
-            raidersLeft = Mathf.Max(1, Mathf.RoundToInt(strength * 3));   // stronger raids = more enemies
+            raidersLeft = Mathf.Max(1, Mathf.RoundToInt(strength * 3));
+            raidersTotal = raidersLeft;
+            raidersThrough = 0;
             raidActive = true;
             ShowToast("Raiders incoming!");
             if (mapView != null) mapView.SpawnRaiders(raidersLeft);
-            else { raidersLeft = 1; RaiderArrived(); }
+            else { raidersLeft = 1; raidersTotal = 1; RaiderArrived(); }
+        }
+        // MapView calls this when an enemy reaches the HQ
+        public void RaiderArrived()
+        {
+            raidersThrough++;
+            RaiderDone();
         }
 
-        // MapView calls this each time an enemy reaches the HQ
-        public void RaiderArrived()
+        // MapView calls this when a tower kills an enemy
+        public void RaiderKilled()
+        {
+            RaiderDone();
+        }
+
+        void RaiderDone()
         {
             raidersLeft--;
             if (raidersLeft > 0) return;
             raidActive = false;
-            Raid();   // your existing strength vs defense check
-            nextRaid = Time.time + Setting("raid_interval_seconds", 120);
+            Raid();
+            nextRaid = Time.time + Setting("raid_interval_seconds", 60);
         }
 
         void Raid()
         {
             raidsDone++;
             float strength = Setting("raid_base_strength", 0.6f) + (raidsDone - 1) * Setting("raid_growth", 0.3f);
+            strength *= (float)raidersThrough / raidersTotal;
             float gap = Mathf.Max(0, strength - hqDefense);
             if (gap <= 0)
             {
