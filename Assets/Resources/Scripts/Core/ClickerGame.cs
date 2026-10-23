@@ -44,6 +44,8 @@ namespace COMP2165.Clicker
         float nextRaid, hqDefense, hqHealth = 100f;
         int raidsDone;
         bool gameOver, won;
+        bool raidActive;
+        int raidersLeft;
         readonly Dictionary<string, Color> rowColors = new Dictionary<string, Color>();
         ClickerCanvasView ui;
         ClickerTooltip shopTooltip;
@@ -204,7 +206,7 @@ namespace COMP2165.Clicker
             nextEvent = Time.time + eventInterval;
             nextGold = Time.time + goldInterval;
             nextSave = Time.time + 15;
-            nextRaid = Time.time + Setting("raid_first_seconds", 150);
+            nextRaid = Time.time + Setting("raid_first_seconds", 10);
             hqHealth = Setting("hq_max_health", 100);
             shopTooltip = ClickerTooltip.Ensure(ui);
             ClickerPalette.Apply(ui, loaded["Palette"]);
@@ -358,7 +360,7 @@ namespace COMP2165.Clicker
             if (Time.time >= nextGold && !goldVisible)
             { goldVisible = true; nextGold = Time.time + goldInterval; }
             if (Time.time >= nextSave) { SaveProgress(); nextSave = Time.time + 15; }
-            if (Time.time >= nextRaid) { Raid(); nextRaid = Time.time + Setting("raid_interval_seconds", 120); }
+            if (Time.time >= nextRaid && !raidActive) StartRaid();
             foreach (var row in buildings) prison.SyncWorkplaces(row.id, row.name, BuildingCount(row));
             RefreshCanvas();
             if (prisonView != null) prisonView.Refresh(this, prison);
@@ -899,12 +901,33 @@ namespace COMP2165.Clicker
         public string RaidStatus()
         {
             if (gameOver) return won ? "VICTORY! The camp held." : "HQ DESTROYED";
+            if (raidActive) return "RAIDERS INCOMING!\nDefense " + hqDefense.ToString("0.00") + "   HQ " + hqHealth.ToString("0") + "/" + Setting("hq_max_health", 100).ToString("0");
             float eta = Mathf.Max(0, nextRaid - Time.time);
             float next = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
             return "Next raid in " + eta.ToString("0") + "s (strength " + next.ToString("0.0") + ")"
                 + "\nDefense " + hqDefense.ToString("0.00")
                 + "   HQ " + hqHealth.ToString("0") + "/" + Setting("hq_max_health", 100).ToString("0")
                 + "   Raids " + raidsDone + "/" + (int)Setting("raids_to_win", 5);
+        }
+
+        void StartRaid()
+        {
+            float strength = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
+            raidersLeft = Mathf.Max(1, Mathf.RoundToInt(strength * 3));   // stronger raids = more enemies
+            raidActive = true;
+            ShowToast("Raiders incoming!");
+            if (mapView != null) mapView.SpawnRaiders(raidersLeft);
+            else { raidersLeft = 1; RaiderArrived(); }
+        }
+
+        // MapView calls this each time an enemy reaches the HQ
+        public void RaiderArrived()
+        {
+            raidersLeft--;
+            if (raidersLeft > 0) return;
+            raidActive = false;
+            Raid();   // your existing strength vs defense check
+            nextRaid = Time.time + Setting("raid_interval_seconds", 120);
         }
 
         void Raid()

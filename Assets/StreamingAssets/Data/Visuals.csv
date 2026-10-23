@@ -11,8 +11,8 @@ hq,icons/gameicons/hq_base.png,,,
 food,icons/gameicons/food.png,,,
 wood,icons/gameicons/wood.png,,,
 planks,icons/gameicons/plank.png,,,
-supplies,icons/gameicons/supplies.png,,,48
-sprite_sheet,sheets/cookie_clicker_icons.png,,,
+supplies,icons/gameicons/supplies.png,,,
+sprite_sheet,sheets/cookie_clicker_icons.png,,,48
 clickable,,6,3,
 golden_cookie,,11,3,
 cursor,,0,0,

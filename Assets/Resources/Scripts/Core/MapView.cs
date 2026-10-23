@@ -24,6 +24,10 @@ namespace COMP2165.Clicker
         public float wanderRadius = 45f;   // how far from the building centre they roam (map pixels)
         public float wanderSpeed = 25f;    // map pixels per second
         public RawImage hqImage;   // the Raw Image on the HQ object
+        public RawImage enemyTemplate;   // switched-off Raw Image the enemies are cloned from
+        public RectTransform enemySpawn; // where enemies appear
+        public float enemySpeed = 60f;   // map pixels per second
+        readonly List<RawImage> enemies = new List<RawImage>();
         public string guardBuilding = "watchtower";   // the building id that guards others
         public GameObject confirmPanel;   // the Sell Confirm panel (starts switched off)
         public Text confirmText;
@@ -107,6 +111,7 @@ namespace COMP2165.Clicker
             g.SetHqDefense(hqDefense);
             if (hqImage != null && hqImage.texture == null) hqImage.texture = g.GetImage("hq");
             if (hq != null && walkerTemplate != null) UpdateWalkers(g);
+            if (hq != null) MoveEnemies();
         }
 
         void UpdateWalkers(ClickerGame g)
@@ -207,6 +212,48 @@ namespace COMP2165.Clicker
             foreach (var p in arrivedHome) { Destroy(walkers[p].img.gameObject); walkers.Remove(p); }
         }
 
+        public void SpawnRaiders(int count)
+        {
+            if (enemyTemplate == null || enemySpawn == null || hq == null)
+            {
+                Debug.LogWarning("SpawnRaiders fallback. Template: " + (enemyTemplate != null) + ", Spawn: " + (enemySpawn != null) + ", HQ: " + (hq != null));
+                for (int i = 0; i < count; i++) game.RaiderArrived();
+                return;
+            }
+            Vector2 start = CenterInMap(enemySpawn);
+            for (int i = 0; i < count; i++)
+            {
+                RawImage img = Instantiate(enemyTemplate, map);
+                img.gameObject.SetActive(true);
+                var r = img.rectTransform;
+                r.anchorMin = r.anchorMax = new Vector2(0, 1);
+                r.pivot = new Vector2(0.5f, 0.5f);
+                r.sizeDelta = new Vector2(64, 64);
+                r.localScale = Vector3.one;
+                r.anchoredPosition = start + UnityEngine.Random.insideUnitCircle * 40f;
+                img.raycastTarget = false;
+                img.texture = game.GetImage("monster");
+                img.color = img.texture != null ? Color.white : Color.red;
+                enemies.Add(img);
+            }
+        }
+
+        void MoveEnemies()
+        {
+            Vector2 target = CenterInMap(hq);
+            for (int i = enemies.Count - 1; i >= 0; i--)
+            {
+                var rt = enemies[i].rectTransform;
+                rt.anchoredPosition = Vector2.MoveTowards(rt.anchoredPosition, target, enemySpeed * Time.deltaTime);
+                if (Vector2.Distance(rt.anchoredPosition, target) < 5f)
+                {
+                    Destroy(enemies[i].gameObject);
+                    enemies.RemoveAt(i);
+                    game.RaiderArrived();
+                }
+            }
+        }
+
         Vector2 CenterInMap(RectTransform r)
         {
             Vector3 local = map.InverseTransformPoint(r.TransformPoint(r.rect.center));
@@ -221,6 +268,7 @@ namespace COMP2165.Clicker
         void Build()
         {
             built = true;
+            if (enemyTemplate != null) enemyTemplate.gameObject.SetActive(false);
             if (confirmYes != null) confirmYes.onClick.AddListener(ConfirmSell);
             if (confirmNo != null) confirmNo.onClick.AddListener(CancelSell);
             foreach (var marker in map.GetComponentsInChildren<MapSlot>(true))
