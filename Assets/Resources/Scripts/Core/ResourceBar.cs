@@ -30,7 +30,7 @@ namespace COMP2165.Clicker
             for (int i = 0; i < entries.Count; i++)
             {
                 entries[i].label.text = game.CurrencyName(i) + " " + game.AmountText(i);
-                Texture2D art = game.GetImage("res_" + game.CurrencyId(i));
+                Texture2D art = game.GetImage("res_" + game.CurrencyId(i)) ?? game.GetImage(game.CurrencyId(i));
                 entries[i].icon.enabled = art != null;
                 entries[i].icon.texture = art;
             }
