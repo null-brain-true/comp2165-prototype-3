@@ -41,6 +41,8 @@ namespace COMP2165.Clicker
         PrisonPanelView prisonView;
         MapView mapView;
         public string ArmedBuilding = "";
+        public Prisoner SelectedPrisoner;     // the waiting prisoner picked in the Prisoner List
+        public Workplace SelectedWorkplace;   // the building clicked on the map
         bool wasStarving;
         float nextRaid, hqDefense, hqHealth = 100f;
         int raidsDone;
@@ -1110,6 +1112,27 @@ namespace COMP2165.Clicker
             float used = ConsumedPerSecond(i);
             return used > 0 ? "-" + Format(used) + "/s" : "";
         }
+
+        // What one building uses up per second, e.g. "1.5 Ore, 3 Wood/s". "None" if it uses nothing.
+        public string ConsumptionText(Workplace w)
+        {
+            BuildingData row = FindBuilding(w.typeId);
+            if (row == null || row.inputs.Count == 0) return "None";
+
+            float made = w.SuppliesPerSecond();
+            if (prison != null && prison.starving && w.yieldCurrency != prison.foodId) made *= prison.starvePenalty;
+            if (prison != null) made *= prison.Efficiency(w.typeId);
+            made *= Multiplier;
+
+            var sb = new StringBuilder();
+            foreach (var line in row.inputs)
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(Format(made * line.amount)).Append(' ').Append(currencyAssets[line.currencyId].name);
+            }
+            return sb.Append("/s").ToString();
+        }
+        
         public string RateTooltip(int i)
         {
             var def = currencyDefinitions[i];
@@ -1167,6 +1190,11 @@ namespace COMP2165.Clicker
             if (string.IsNullOrEmpty(ArmedBuilding)) return;
             ArmedBuilding = "";
             ShowToast("Placement cancelled.");
+        }
+        // The SELL button in the building window calls this
+        public void AskSellSelected()
+        {
+            if (mapView != null) mapView.AskSell();
         }
         public string GetLabel(string key, string fallback) { return Label(key, fallback); }
 

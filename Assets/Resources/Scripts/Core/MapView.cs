@@ -39,6 +39,8 @@ namespace COMP2165.Clicker
         public Text confirmText;
         public Button confirmYes, confirmNo;
         Slot pendingSell;
+        Slot openSlot;          // the building whose details are showing
+        public TabPages tabs;   // optional: drag in the object with TabPages, so clicking a building opens the Prisoners tab
 
         class Slot
         {
@@ -363,15 +365,7 @@ namespace COMP2165.Clicker
         {
             if (s.occupant != "")
             {
-                if (confirmPanel == null)   // no popup set up: sell straight away, as before
-                {
-                    if (game.SellPlacedBuilding(s.occupant)) { s.occupant = ""; Save(); }
-                    return;
-                }
-                pendingSell = s;
-                if (confirmText != null)
-                    confirmText.text = "Sell " + game.BuildingName(s.occupant) + " for " + game.RefundFor(s.occupant).ToString("0.#") + " supplies?";
-                confirmPanel.SetActive(true);
+                OpenBuilding(s);   // show its details, and assign the selected prisoner if there is one
                 return;
             }
             string armed = game.ArmedBuilding;
@@ -387,6 +381,58 @@ namespace COMP2165.Clicker
             }
         }
 
+        // Clicking a building on the map: assign the selected prisoner (if any) and show its details
+        void OpenBuilding(Slot s)
+        {
+            Workplace place = WorkplaceFor(s);
+            if (place == null) return;   // just placed, the workplace isn't created yet
+            openSlot = s;
+
+            Prisoner waiting = game.SelectedPrisoner;
+            if (waiting != null)
+            {
+                if (game.Prison.Assign(waiting, place)) game.SelectedPrisoner = null;
+                else game.Notify(place.name + " is full.");
+            }
+            game.SelectedWorkplace = place;
+            if (tabs != null) tabs.Show(0);   // 0 = the Prisoners tab
+        }
+
+        // Called by the SELL button in the building window (this is the old sell code from Clicked)
+        public void AskSell()
+        {
+            if (openSlot == null || openSlot.occupant == "") return;
+            if (confirmPanel == null)   // no popup set up: sell straight away
+            {
+                if (game.SellPlacedBuilding(openSlot.occupant)) { openSlot.occupant = ""; game.SelectedWorkplace = null; Save(); }
+                return;
+            }
+            pendingSell = openSlot;
+            if (confirmText != null)
+                confirmText.text = "Demolish " + game.BuildingName(openSlot.occupant) + " for " + game.RefundFor(openSlot.occupant).ToString("0.#") + " supplies?";
+            confirmPanel.SetActive(true);
+        }
+
+        // Which Workplace (the object that holds the workers) belongs to this map slot?
+        // The 1st Farm slot is the 1st Farm workplace, the 2nd Farm slot is the 2nd one, and so on.
+        Workplace WorkplaceFor(Slot target)
+        {
+            int index = 0;
+            foreach (var s in slots)
+            {
+                if (s == target) break;
+                if (s.occupant.Equals(target.occupant, StringComparison.OrdinalIgnoreCase)) index++;
+            }
+            int seen = 0;
+            foreach (var w in game.Prison.workplaces)
+            {
+                if (!w.typeId.Equals(target.occupant, StringComparison.OrdinalIgnoreCase)) continue;
+                if (seen == index) return w;
+                seen++;
+            }
+            return null;
+        }
+
         void ConfirmSell()
         {
             if (pendingSell != null && pendingSell.occupant != "")
@@ -394,6 +440,7 @@ namespace COMP2165.Clicker
                 if (game.SellPlacedBuilding(pendingSell.occupant)) { pendingSell.occupant = ""; Save(); }
             }
             CancelSell();
+            if (game.SellPlacedBuilding(pendingSell.occupant)) { pendingSell.occupant = ""; game.SelectedWorkplace = null; Save(); }
         }
 
         void CancelSell()

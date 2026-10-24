@@ -6578,7 +6578,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: PRISONER ASSIGN
+  m_Text: BUILDING
 --- !u!222 &547352854
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -13123,6 +13123,7 @@ MonoBehaviour:
   confirmText: {fileID: 100438328}
   confirmYes: {fileID: 261885199}
   confirmNo: {fileID: 1879835942}
+  tabs: {fileID: 604437028}
 --- !u!1 &1058977892
 GameObject:
   m_ObjectHideFlags: 0
