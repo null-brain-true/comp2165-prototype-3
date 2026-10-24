@@ -21,6 +21,7 @@ namespace COMP2165.Clicker
         public string foodId = "food";   // starvation never cuts food output, so a famine can recover
         public bool starving = false;        // set each second by ClickerGame
         public float starvePenalty = 0.5f;   // production multiplier while starving
+        public Dictionary<string, float> efficiency = new Dictionary<string, float>();   // per building type: 1 = has all inputs, 0 = has none
 
         public int prisonersOrdered = 0;
 
@@ -195,6 +196,7 @@ namespace COMP2165.Clicker
             {
                 Workplace w = workplaces[i];
                 float made = w.SuppliesPerSecond();
+                made *= Efficiency(w.typeId);
                 if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
                 if (made > 0)
                 {
@@ -407,6 +409,33 @@ namespace COMP2165.Clicker
             if (t != null) t.yieldCurrency = currencyId;
         }
 
+        public void SetEfficiency(string typeId, float value)
+        {
+            efficiency[typeId] = value;
+        }
+
+        public float Efficiency(string typeId)
+        {
+            float value;
+            return efficiency.TryGetValue(typeId, out value) ? value : 1f;
+        }
+
+        // What each building type would make this second if it had all its inputs.
+        public Dictionary<string, float> PotentialByType()
+        {
+            Dictionary<string, float> output = new Dictionary<string, float>();
+            for (int i = 0; i < workplaces.Count; i++)
+            {
+                Workplace w = workplaces[i];
+                float made = w.SuppliesPerSecond();
+                if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
+                float have;
+                output.TryGetValue(w.typeId, out have);
+                output[w.typeId] = have + made;
+            }
+            return output;
+        }
+
         // Share of this building type's buildings that have someone working inside (0 to 1)
         public float StaffedFraction(string typeId)
         {
@@ -427,6 +456,7 @@ namespace COMP2165.Clicker
             {
                 Workplace w = workplaces[i];
                 float made = w.SuppliesPerSecond();
+                made *= Efficiency(w.typeId);
                 if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
                 if (made <= 0) continue;
                 float have;

@@ -12,6 +12,8 @@ food,icons/gameicons/food.png,,,
 wood,icons/gameicons/wood.png,,,
 planks,icons/gameicons/plank.png,,,
 supplies,icons/gameicons/supplies.png,,,
+ore,icons/gameicons/ore.png,,,
+bars,icons/gameicons/bars.png,,,
 sprite_sheet,sheets/cookie_clicker_icons.png,,,48
 clickable,,6,3,
 golden_cookie,,11,3,

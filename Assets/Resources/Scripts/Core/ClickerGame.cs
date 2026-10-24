@@ -34,6 +34,7 @@ namespace COMP2165.Clicker
         readonly Dictionary<string, Upgrade> upgradeAssets = new Dictionary<string, Upgrade>();
         readonly Dictionary<string, ClickerShopRow> buildingRows = new Dictionary<string, ClickerShopRow>();
         readonly Dictionary<string, ClickerShopRow> upgradeRows = new Dictionary<string, ClickerShopRow>();
+        readonly Dictionary<string, float> usedLastTick = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 
         ClickerManager manager;
         PrisonManager prison;
@@ -134,9 +135,24 @@ namespace COMP2165.Clicker
 
             foreach (var row in loaded["Buildings"])
             {
-                var item = new BuildingData { id = Csv.Get(row, "id"), name = Csv.Get(row, "name"), description = Csv.Get(row, "description"), tooltip = Csv.Get(row, "tooltip"), image = Csv.Get(row, "image"), cost = Csv.Number(row, "base_cost"), perSecond = Csv.Number(row, "per_second"), unlockAt = Csv.Number(row, "unlock_at"), costCurrency = Csv.Get(row, "cost_currency", primaryId), yieldCurrency = Csv.Get(row, "yield_currency", primaryId) };
+                var item = new BuildingData { id = Csv.Get(row, "id"), name = Csv.Get(row, "name"), description = Csv.Get(row, "description"), tooltip = Csv.Get(row, "tooltip"), image = Csv.Get(row, "image"), perSecond = Csv.Number(row, "per_second"), unlockAt = Csv.Number(row, "unlock_at"), yieldCurrency = Csv.Get(row, "yield_currency", primaryId) };
+
+                // base_cost and cost_currency can hold several values split by |
+                // The first pair is the main cost. Any others are extra costs.
+                var costs = new List<RecipeLine>();
+                string problem = ReadPairs(Csv.Get(row, "cost_currency", primaryId), Csv.Get(row, "base_cost", "0"), costs);
+                if (problem != "") { error = "Buildings.csv (" + item.id + "): " + problem; yield break; }
+                item.costCurrency = costs[0].currencyId;
+                item.cost = costs[0].amount;
+                costs.RemoveAt(0);
+                item.extraCosts = costs;
+
+                // input_currency and input_amount work the same way: what it uses up per item made
+                problem = ReadPairs(Csv.Get(row, "input_currency"), Csv.Get(row, "input_amount"), item.inputs);
+                if (problem != "") { error = "Buildings.csv (" + item.id + "): " + problem; yield break; }
+
                 item.unlockCurrency = Csv.Get(row, "unlock_currency", item.costCurrency);
-                if (string.IsNullOrEmpty(item.id) || item.cost < 0 || item.perSecond < 0) { error = "Invalid Buildings.csv row."; yield break; }
+                if (string.IsNullOrEmpty(item.id) || item.perSecond < 0) { error = "Invalid Buildings.csv row."; yield break; }
                 buildings.Add(item);
             }
             foreach (var row in loaded["Upgrades"])
@@ -216,6 +232,24 @@ namespace COMP2165.Clicker
             RefreshCanvas();
         }
 
+        // Reads two matching columns like "bars | planks" and "10 | 20" into a list.
+        // Returns a problem message, or "" if everything is fine.
+        static string ReadPairs(string currencyText, string amountText, List<RecipeLine> result)
+        {
+            if (string.IsNullOrWhiteSpace(currencyText) && string.IsNullOrWhiteSpace(amountText)) return "";
+            string[] currencies = currencyText.Split('|');
+            string[] amounts = amountText.Split('|');
+            if (currencies.Length != amounts.Length) return "the currencies and amounts need the same number of values";
+            for (int i = 0; i < currencies.Length; i++)
+            {
+                float amount;
+                if (!float.TryParse(amounts[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out amount) || amount <= 0)
+                    return "amounts must be numbers above 0 (found '" + amounts[i].Trim() + "')";
+                result.Add(new RecipeLine { currencyId = currencies[i].Trim(), amount = amount });
+            }
+            return "";
+        }
+
         float Setting(string key, float fallback)
         {
             string text;
@@ -257,6 +291,10 @@ namespace COMP2165.Clicker
                 if (buildingAssets.ContainsKey(row.id)) { error = "Duplicate building ID: " + row.id; return; }
                 if (!currencyAssets.ContainsKey(row.costCurrency) || !currencyAssets.ContainsKey(row.yieldCurrency) || !currencyAssets.ContainsKey(row.unlockCurrency))
                 { error = "Unknown building currency: " + row.id; return; }
+                foreach (var line in row.extraCosts)
+                    if (!currencyAssets.ContainsKey(line.currencyId)) { error = "Unknown building currency: " + row.id + " (" + line.currencyId + ")"; return; }
+                foreach (var line in row.inputs)
+                    if (!currencyAssets.ContainsKey(line.currencyId)) { error = "Unknown building currency: " + row.id + " (" + line.currencyId + ")"; return; }
                 var item = ScriptableObject.CreateInstance<Building>();
                 item.name = row.name; item.Cost = new CurrencyTuple { Currency = currencyAssets[row.costCurrency], Amount = row.cost };
                 item.YieldAmount = new CurrencyTuple { Currency = currencyAssets[row.yieldCurrency], Amount = row.perSecond };
@@ -337,6 +375,7 @@ namespace COMP2165.Clicker
                 for (int i = 0; i < buildings.Count; i++)
                 { var asset = buildingAssets[buildings[i].id]; var value = asset.YieldAmount; value.Amount = originals[i]; asset.YieldAmount = value; }
                 EatFood();
+                ApplyInputs();
                 foreach (var pair in prison.Tick())
                 {
                     Currency target;
@@ -380,6 +419,81 @@ namespace COMP2165.Clicker
                 source.Amount = row.clickAmount;
             }
             PlaySound("click");
+        }
+
+        float ExtraCostAmount(RecipeLine line, int owned)
+        {
+            return Mathf.Ceil(line.amount * Mathf.Pow(1 + manager.Config.BuildingCostIncrease, owned));
+        }
+
+        // Name of the first extra cost the player can't afford. Blank means they can afford all of them.
+        string MissingExtra(BuildingData row, int owned)
+        {
+            foreach (var line in row.extraCosts)
+            {
+                var asset = currencyAssets[line.currencyId];
+                if (Balance(asset) < ExtraCostAmount(line, owned)) return asset.name;
+            }
+            return "";
+        }
+
+        void PayExtras(BuildingData row, int owned)
+        {
+            foreach (var line in row.extraCosts)
+            {
+                var asset = currencyAssets[line.currencyId];
+                manager.State.CurrencyCurrentTotals[asset] = Balance(asset) - ExtraCostAmount(line, owned);
+            }
+        }
+
+        string ExtraCostText(BuildingData row, int owned)
+        {
+            var sb = new StringBuilder();
+            foreach (var line in row.extraCosts)
+                sb.Append("\n").Append(Format(ExtraCostAmount(line, owned))).Append(' ').Append(currencyAssets[line.currencyId].name);
+            return sb.ToString();
+        }
+
+        string InputText(BuildingData row)
+        {
+            var sb = new StringBuilder();
+            foreach (var line in row.inputs)
+                sb.Append("\n").Append(Format(line.amount)).Append(' ').Append(currencyAssets[line.currencyId].name);
+            return sb.ToString();
+        }
+
+        // Called once per second, before the prisoners' output is added.
+        void ApplyInputs()
+        {
+            usedLastTick.Clear();
+            var potential = prison.PotentialByType();
+            foreach (var row in buildings)
+            {
+                float made = 0;
+                if (row.inputs.Count == 0 || !potential.TryGetValue(row.id, out made) || made <= 0)
+                {
+                    prison.SetEfficiency(row.id, 1f);
+                    continue;
+                }
+                made *= Multiplier;   // a boost makes more items, so it uses more inputs too
+
+                // How much of the wanted output can we pay for? 1 = all of it, 0 = none
+                float factor = 1f;
+                foreach (var line in row.inputs)
+                    factor = Mathf.Min(factor, Balance(currencyAssets[line.currencyId]) / (made * line.amount));
+                prison.SetEfficiency(row.id, factor);
+
+                // Take the inputs now
+                foreach (var line in row.inputs)
+                {
+                    var asset = currencyAssets[line.currencyId];
+                    float used = made * factor * line.amount;
+                    manager.State.CurrencyCurrentTotals[asset] = Mathf.Max(0, Balance(asset) - used);
+                    float before;
+                    usedLastTick.TryGetValue(line.currencyId, out before);
+                    usedLastTick[line.currencyId] = before + used;
+                }
+            }
         }
 
         void EatFood()
@@ -820,8 +934,10 @@ namespace COMP2165.Clicker
                 row.icon.texture = Image(data.image) ?? Icon(data.id, data.id);
                 row.title.text = data.name + "  ×" + count;
                 row.tooltipText = string.IsNullOrWhiteSpace(data.tooltip) ? string.Empty : data.name + "\n" + data.tooltip + (unlocked ? "" : "\nUnlock at " + Format(data.unlockAt) + " lifetime " + unlockCurrency.name);
-                row.action.interactable = unlocked && (sellingBuildings ? count >= buildingBatch : Balance(costCurrency) >= value);
+                if (data.inputs.Count > 0) row.tooltipText += "\nProduces 1 " + currencyAssets[data.yieldCurrency].name + " for " + InputText(data).Trim().Replace("\n", ", ");
+                row.action.interactable = unlocked && (sellingBuildings ? count >= buildingBatch : Balance(costCurrency) >= value && MissingExtra(data, count) == "");
                 row.actionText.text = !unlocked ? "LOCKED" : sellingBuildings && count < buildingBatch ? "NEED " + buildingBatch : (sellingBuildings ? "SELL\n" : "BUY\n") + Format(value) + " " + costCurrency.name;
+                if (!sellingBuildings && unlocked && data.extraCosts.Count > 0) row.actionText.text += ExtraCostText(data, count);
                 bool armedRow = ArmedBuilding == data.id;
                 var rowImage = row.GetComponent<Image>();
                 Color normalRow;
@@ -976,11 +1092,29 @@ namespace COMP2165.Clicker
         public string AmountText(int i) { return Format(Balance(currencyAssets[currencyDefinitions[i].id])); }
         public bool IsStarving { get { return prison != null && prison.starving; } }
 
+
+        // How much of this currency is used up per second (inputs, plus food eaten by prisoners)
+        public float ConsumedPerSecond(int i)
+        {
+            string id = currencyDefinitions[i].id;
+            float used;
+            usedLastTick.TryGetValue(id, out used);
+            if (id.Equals("food", StringComparison.OrdinalIgnoreCase) && prison != null)
+                used += prison.PrisonerCount() * Setting("food_per_prisoner", 0.1f);
+            return used;
+        }
+
+        // For the resource bar: blank if nothing uses it, otherwise something like "-1.5/s"
+        public string ConsumedText(int i)
+        {
+            float used = ConsumedPerSecond(i);
+            return used > 0 ? "-" + Format(used) + "/s" : "";
+        }
         public string RateTooltip(int i)
         {
             var def = currencyDefinitions[i];
             float fromBuildings = PerSecond(currencyAssets[def.id]);
-            float fromPrisoners = 0, eaten = 0;
+            float fromPrisoners = 0;
             if (prison != null)
             {
                 foreach (var pair in prison.OutputPerSecond())
@@ -989,15 +1123,14 @@ namespace COMP2165.Clicker
                     if (pair.Key.Equals(def.id, StringComparison.OrdinalIgnoreCase) || (!known && i == 0))
                         fromPrisoners += pair.Value * Multiplier;   // blank or unknown output goes to the first currency
                 }
-                if (def.id.Equals("food", StringComparison.OrdinalIgnoreCase))
-                    eaten = prison.PrisonerCount() * Setting("food_per_prisoner", 0.1f);
             }
-            float net = fromBuildings + fromPrisoners - eaten;
+            float consumed = ConsumedPerSecond(i);
+            float net = fromBuildings + fromPrisoners - consumed;
             var sb = new StringBuilder();
             sb.Append(def.name).Append("\n").Append(net >= 0 ? "+" : "").Append(Format(net)).Append("/s");
             sb.Append("\nBuildings: +").Append(Format(fromBuildings));
             sb.Append("\nPrisoners: +").Append(Format(fromPrisoners));
-            if (eaten > 0) sb.Append("\nEaten: -").Append(Format(eaten));
+            if (consumed > 0) sb.Append("\nConsumption: -").Append(Format(consumed));
             if (Multiplier > 1.01f) sb.Append("\nBoost x").Append(Format(Multiplier)).Append(" active");
             return sb.ToString();
         }
@@ -1070,7 +1203,10 @@ namespace COMP2165.Clicker
             int count = BuildingCount(row);
             float cost = (float)((int)row.cost * Math.Pow(1 + manager.Config.BuildingCostIncrease, count));
             if (Balance(costCurrency) < cost) { ShowToast("Not enough " + costCurrency.name + " for " + row.name + "."); return false; }
+            string missing = MissingExtra(row, count);
+            if (missing != "") { ShowToast("Not enough " + missing + " for " + row.name + "."); return false; }
             manager.BuyBuilding(asset);
+            PayExtras(row, count);
             ShowToast("Placed " + row.name + " for " + Format(cost) + " " + costCurrency.name + ".");
             PlaySound("buy");
             SaveProgress();

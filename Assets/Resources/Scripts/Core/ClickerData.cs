@@ -60,12 +60,21 @@ namespace COMP2165.Clicker
     }
 
     [Serializable] public class CurrencyData { public string id, name; public float startingAmount, clickAmount; }
-    [Serializable] public class BuildingData { public string id, name, description, tooltip, image, costCurrency, yieldCurrency, unlockCurrency; public float cost, perSecond, unlockAt; }
+    [Serializable] public class RecipeLine { public string currencyId; public float amount; }
+    [Serializable]
+    public class BuildingData
+    {
+        public string id, name, description, tooltip, image, costCurrency, yieldCurrency, unlockCurrency;
+        public float cost, perSecond, unlockAt;
+        public List<RecipeLine> extraCosts = new List<RecipeLine>();   // extra build costs (the 2nd, 3rd... pairs in base_cost)
+        public List<RecipeLine> inputs = new List<RecipeLine>();       // used up per item made
+    }
     [Serializable] public class UpgradeData { public string id, name, description, tooltip, targetType, targetId, operation, image, costCurrency, unlockCurrency; public float cost, amount, unlockAt; }
     [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId; public int correctOption; }
     [Serializable] public class BuildingSave { public string id; public int count; }
     [Serializable] public class CurrencySave { public string id; public float amount, lifetime; }
-    [Serializable] public class ClickerSave
+    [Serializable]
+    public class ClickerSave
     {
         public float money, lifetime;
         public List<CurrencySave> currencies = new List<CurrencySave>();
