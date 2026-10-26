@@ -181,7 +181,7 @@ namespace COMP2165.Clicker
             Texture2D sprite = game.GetImage(SpriteKey(p.faction));
             row.icon.texture = sprite;
             row.icon.color = sprite != null ? Color.white : FactionColor(p.faction);
-            row.title.text = p.Label() + "  " + p.faction + "\nSTR " + p.strength + "  AGI " + p.agility + "\nINT " + p.intellect + "\nCrime: " + p.crime;
+            row.title.text = p.Label() + "  " + p.faction + "\nSTR " + p.strength + " AGI " + p.agility + " INT " + p.intellect + "\nCrime: " + p.crime;
             //row.tooltip = game.Tooltip;
             //row.tooltipText = p.Label() + "\n" + p.faction + "\nCrime: " + p.crime;
         }

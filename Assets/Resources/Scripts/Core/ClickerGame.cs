@@ -163,9 +163,19 @@ namespace COMP2165.Clicker
             }
             foreach (var row in loaded["Upgrades"])
             {
-                var item = new UpgradeData { id = Csv.Get(row, "id"), name = Csv.Get(row, "name"), description = Csv.Get(row, "description"), tooltip = Csv.Get(row, "tooltip"), image = Csv.Get(row, "image"), targetType = Csv.Get(row, "target_type"), targetId = Csv.Get(row, "target_id"), operation = Csv.Get(row, "operation"), cost = Csv.Number(row, "cost"), amount = Csv.Number(row, "amount", 1), unlockAt = Csv.Number(row, "unlock_at"), costCurrency = Csv.Get(row, "cost_currency", primaryId) };
+                var item = new UpgradeData { id = Csv.Get(row, "id"), name = Csv.Get(row, "name"), description = Csv.Get(row, "description"), tooltip = Csv.Get(row, "tooltip"), image = Csv.Get(row, "image"), targetType = Csv.Get(row, "target_type"), targetId = Csv.Get(row, "target_id"), operation = Csv.Get(row, "operation"), amount = Csv.Number(row, "amount", 1), unlockAt = Csv.Number(row, "unlock_at") };
+
+                // cost and cost_currency can hold several values split by |. The first pair is the main cost.
+                var costs = new List<RecipeLine>();
+                string problem = ReadPairs(Csv.Get(row, "cost_currency", primaryId), Csv.Get(row, "cost", "0"), costs);
+                if (problem != "") { error = "Upgrades.csv (" + item.id + "): " + problem; yield break; }
+                item.costCurrency = costs[0].currencyId;
+                item.cost = costs[0].amount;
+                costs.RemoveAt(0);
+                item.extraCosts = costs;
+
                 item.unlockCurrency = Csv.Get(row, "unlock_currency", item.costCurrency);
-                if (string.IsNullOrEmpty(item.id) || item.cost < 0 || item.amount <= 0) { error = "Invalid Upgrades.csv row."; yield break; }
+                if (string.IsNullOrEmpty(item.id) || item.amount <= 0) { error = "Invalid Upgrades.csv row."; yield break; }
                 upgrades.Add(item);
             }
             foreach (var row in loaded["Events"])
@@ -202,7 +212,7 @@ namespace COMP2165.Clicker
             prison = new PrisonManager(loaded["Workplaces"], (int)Setting("starting_prisoners", 0), (int)Setting("prisoner_stat_total", 15));
             if (!string.IsNullOrEmpty(prison.error)) { error = prison.error; yield break; }
             prison.tensionThreshold = Setting("tension_threshold", 5);
-            prison.prisonerBaseCost = Setting("prisoner_base_cost", 25);
+            prison.prisonerBaseCost = Setting("prisoner_base_cost", 5);
             prison.costGrowth = Setting("building_cost_growth_percent", 15) / 100f;
             prison.defaultSpeed = Setting("prisoner_default_speed", 50);
             prison.SetCrimes(loaded["Crimes"]);
@@ -1263,12 +1273,13 @@ namespace COMP2165.Clicker
 
         void Raid()
         {
-            raidsDone++;
-            float strength = Setting("raid_base_strength", 0.6f) + (raidsDone - 1) * Setting("raid_growth", 0.3f);
+            // raidsDone has not been increased yet, so this matches the strength shown in RaidStatus/StartRaid
+            float strength = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
             strength *= (float)raidersThrough / raidersTotal;
             float gap = Mathf.Max(0, strength - hqDefense);
             if (gap <= 0)
             {
+                raidsDone++;   // only a successful defense counts
                 ShowToast("Raid " + raidsDone + " repelled!");
             }
             else
@@ -1281,7 +1292,7 @@ namespace COMP2165.Clicker
                     manager.State.CurrencyCurrentTotals[asset] = Balance(asset) * (1f - loss);
                 }
                 hqHealth -= frac * Setting("raid_damage", 34);
-                ShowToast("Raid " + raidsDone + " broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles.");
+                ShowToast("Raid broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles.");
                 TriggerEvent("raid");
             }
             if (hqHealth <= 0) { gameOver = true; won = false; }
