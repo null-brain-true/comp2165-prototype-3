@@ -70,7 +70,7 @@ namespace COMP2165.Clicker
         public List<RecipeLine> inputs = new List<RecipeLine>();       // used up per item made
     }
     [Serializable] public class UpgradeData { public string id, name, description, tooltip, targetType, targetId, operation, image, costCurrency, unlockCurrency; public float cost, amount, unlockAt; }
-    [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId; public int correctOption; }
+    [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId, trigger, effect1, effect2; public int correctOption; }
     [Serializable] public class BuildingSave { public string id; public int count; }
     [Serializable] public class CurrencySave { public string id; public float amount, lifetime; }
     [Serializable]

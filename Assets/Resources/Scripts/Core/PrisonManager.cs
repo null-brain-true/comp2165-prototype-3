@@ -18,6 +18,8 @@ namespace COMP2165.Clicker
         public float prisonerBaseCost = 25f;  // price of the first ordered prisoner
         public float defaultSpeed = 50f;
         public string guardTypeId = "watchtower";
+        public int nextNumber = 1;
+        public List<string> crimes = new List<string>();
         public string foodId = "food";   // starvation never cuts food output, so a famine can recover
         public bool starving = false;        // set each second by ClickerGame
         public float starvePenalty = 0.5f;   // production multiplier while starving
@@ -126,6 +128,14 @@ namespace COMP2165.Clicker
             }
         }
 
+        // A building destroyed by a disaster. Its workers go back to the waiting list.
+        public void RemoveWorkplace(Workplace w)
+        {
+            for (int j = 0; j < w.workers.Count; j++) { w.workers[j].travelLeft = 0; unassigned.Add(w.workers[j]); }
+            workplaces.Remove(w);
+            version++;
+        }
+
         // ----- Prisoners -----
 
         // Price of the next prisoner. Rises with each one you order.
@@ -164,12 +174,15 @@ namespace COMP2165.Clicker
             }
             Prisoner p = new Prisoner(faction, strength, agility, intellect);
             p.speed = defaultSpeed;
+            p.number = nextNumber++;
+            p.crime = RandomCrime();
             return p;
         }
 
         // Moves a waiting prisoner into a workplace. Returns false if the workplace is full.
         public bool Assign(Prisoner p, Workplace place)
         {
+            if (!unassigned.Contains(p)) return false;
             if (!place.AddPrisoner(p)) return false;
             unassigned.Remove(p);
             p.travelLeft = p.speed > 0 ? place.distance / p.speed : 0;
@@ -308,7 +321,9 @@ namespace COMP2165.Clicker
         {
             return (int)p.faction + "," + p.strength + "," + p.agility + "," + p.intellect
                 + "," + p.speed.ToString("0.##", CultureInfo.InvariantCulture)
-                + "," + p.travelLeft.ToString("0.##", CultureInfo.InvariantCulture);
+                + "," + p.travelLeft.ToString("0.##", CultureInfo.InvariantCulture)
+                + "," + p.number
+                + "," + System.Uri.EscapeDataString(p.crime ?? "");
         }
 
         static Prisoner TextToPrisoner(string text)
@@ -322,6 +337,9 @@ namespace COMP2165.Clicker
             float v;
             if (f.Length > 4 && float.TryParse(f[4], NumberStyles.Float, CultureInfo.InvariantCulture, out v)) p.speed = v;
             if (f.Length > 5 && float.TryParse(f[5], NumberStyles.Float, CultureInfo.InvariantCulture, out v)) p.travelLeft = v;
+            int num;
+            if (f.Length > 6 && int.TryParse(f[6], out num)) p.number = num;
+            if (f.Length > 7) p.crime = System.Uri.UnescapeDataString(f[7]);
             return p;
         }
 
@@ -329,6 +347,7 @@ namespace COMP2165.Clicker
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("ordered=").Append(prisonersOrdered);
+            sb.Append("|next=").Append(nextNumber);
 
             sb.Append("|U=");
             for (int i = 0; i < unassigned.Count; i++)
@@ -363,6 +382,11 @@ namespace COMP2165.Clicker
                 {
                     int n;
                     if (int.TryParse(part.Substring(8), out n)) prisonersOrdered = n;
+                }
+                else if (part.StartsWith("next="))
+                {
+                    int n;
+                    if (int.TryParse(part.Substring(5), out n)) nextNumber = n;
                 }
                 else if (part.StartsWith("U="))
                 {
@@ -401,6 +425,7 @@ namespace COMP2165.Clicker
                     if (target != null) target.tension = tension;
                 }
             }
+            FillMissing();
             version++;
         }
         public void SetTypeYield(string typeId, string currencyId)
@@ -464,6 +489,67 @@ namespace COMP2165.Clicker
                 output[w.yieldCurrency] = have + made;
             }
             return output;
+        }
+
+        string RandomCrime()
+        {
+            if (crimes.Count == 0) return "Unknown";
+            return crimes[UnityEngine.Random.Range(0, crimes.Count)];
+        }
+
+        public void SetCrimes(List<Dictionary<string, string>> rows)
+        {
+            crimes.Clear();
+            foreach (var row in rows)
+            {
+                string c = Csv.Get(row, "crime");
+                if (c != "") crimes.Add(c);
+            }
+            FillMissing();
+        }
+
+        // Gives a number and crime to any prisoner that has none (old saves, starting prisoners)
+        public void FillMissing()
+        {
+            for (int i = 0; i < unassigned.Count; i++) Fill(unassigned[i]);
+            for (int i = 0; i < workplaces.Count; i++)
+                for (int j = 0; j < workplaces[i].workers.Count; j++) Fill(workplaces[i].workers[j]);
+        }
+
+        void Fill(Prisoner p)
+        {
+            if (p.number <= 0) p.number = nextNumber++;
+            if (string.IsNullOrEmpty(p.crime)) p.crime = RandomCrime();
+        }
+
+        public int RemoveRandomPrisoners(int count)
+        {
+            int removed = 0;
+            for (int n = 0; n < count; n++)
+            {
+                int total = PrisonerCount();
+                if (total == 0) break;
+                int pick = UnityEngine.Random.Range(0, total);
+                if (pick < unassigned.Count) unassigned.RemoveAt(pick);
+                else
+                {
+                    pick -= unassigned.Count;
+                    for (int i = 0; i < workplaces.Count; i++)
+                    {
+                        if (pick < workplaces[i].workers.Count) { workplaces[i].workers.RemoveAt(pick); break; }
+                        pick -= workplaces[i].workers.Count;
+                    }
+                }
+                removed++;
+            }
+            version++;
+            return removed;
+        }
+
+        public void AddTensionAll(float amount)
+        {
+            for (int i = 0; i < workplaces.Count; i++)
+                workplaces[i].tension = UnityEngine.Mathf.Max(0, workplaces[i].tension + amount);
         }
     }
 }

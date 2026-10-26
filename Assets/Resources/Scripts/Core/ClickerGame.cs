@@ -10,6 +10,7 @@ using UnityEngine.InputSystem.UI;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using uClicker;
+using UnityEngine.SceneManagement;
 
 namespace COMP2165.Clicker
 {
@@ -30,6 +31,8 @@ namespace COMP2165.Clicker
         readonly List<EventData> events = new List<EventData>();
         readonly List<EventData> eventQueue = new List<EventData>();
         readonly List<float> eventBoostEnds = new List<float>();
+        class TimedBoost { public float end, mult; public string currencyId = ""; }
+        readonly List<TimedBoost> timedBoosts = new List<TimedBoost>();   // currencyId "" = global boost
         readonly Dictionary<string, Building> buildingAssets = new Dictionary<string, Building>();
         readonly Dictionary<string, Upgrade> upgradeAssets = new Dictionary<string, Upgrade>();
         readonly Dictionary<string, ClickerShopRow> buildingRows = new Dictionary<string, ClickerShopRow>();
@@ -47,6 +50,7 @@ namespace COMP2165.Clicker
         float nextRaid, hqDefense, hqHealth = 100f;
         int raidsDone;
         bool gameOver, won;
+        bool resetting;
         bool raidActive;
         int raidersLeft;
         int raidersTotal, raidersThrough;
@@ -96,7 +100,7 @@ namespace COMP2165.Clicker
 
         IEnumerator LoadGame()
         {
-            string[] tables = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio", "Palette", "Workplaces" };
+            string[] tables = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio", "Palette", "Workplaces", "Crimes" };
             var loaded = new Dictionary<string, List<Dictionary<string, string>>>();
             foreach (string table in tables)
             {
@@ -169,7 +173,7 @@ namespace COMP2165.Clicker
                 int correctOption;
                 if (!int.TryParse(Csv.Get(row, "Correct Option"), NumberStyles.Integer, CultureInfo.InvariantCulture, out correctOption) || correctOption < 0 || correctOption > 2)
                 { error = "Every event needs Correct Option 0 (random), 1, or 2."; yield break; }
-                var item = new EventData { title = Csv.Get(row, "Event Title"), description = Csv.Get(row, "Event Description"), option1 = Csv.Get(row, "Event Option 1"), option2 = Csv.Get(row, "Event Option 2"), image = Csv.Get(row, "Image"), sound = Csv.Get(row, "Sound"), currencyId = Csv.Get(row, "Currency", primaryId), correctOption = correctOption };
+                var item = new EventData { title = Csv.Get(row, "Event Title"), description = Csv.Get(row, "Event Description"), option1 = Csv.Get(row, "Event Option 1"), option2 = Csv.Get(row, "Event Option 2"), image = Csv.Get(row, "Image"), sound = Csv.Get(row, "Sound"), currencyId = Csv.Get(row, "Currency", primaryId), correctOption = correctOption, trigger = Csv.Get(row, "Trigger"), effect1 = Csv.Get(row, "Option 1 Effect"), effect2 = Csv.Get(row, "Option 2 Effect") };
                 events.Add(item);
             }
             foreach (var row in loaded["Visuals"])
@@ -201,6 +205,7 @@ namespace COMP2165.Clicker
             prison.prisonerBaseCost = Setting("prisoner_base_cost", 25);
             prison.costGrowth = Setting("building_cost_growth_percent", 15) / 100f;
             prison.defaultSpeed = Setting("prisoner_default_speed", 50);
+            prison.SetCrimes(loaded["Crimes"]);
             foreach (var row in buildings)
             {
                 if (!prison.HasType(row.id)) { error = "Workplaces.csv has no row for building: " + row.id; yield break; }
@@ -227,6 +232,8 @@ namespace COMP2165.Clicker
             nextSave = Time.time + 15;
             nextRaid = Time.time + Setting("raid_first_seconds", 60);
             hqHealth = Setting("hq_max_health", 100);
+            LoadRaid();
+            LoadEvents();
             shopTooltip = ClickerTooltip.Ensure(ui);
             ClickerPalette.Apply(ui, loaded["Palette"]);
             ready = true;
@@ -351,8 +358,21 @@ namespace COMP2165.Clicker
             {
                 double value = Time.time < goldEnd ? goldBonus : 1;
                 for (int i = 0; i < eventBoostEnds.Count; i++) if (Time.time < eventBoostEnds[i]) value *= goldBonus * 10;
+                for (int i = 0; i < timedBoosts.Count; i++)
+                    if (timedBoosts[i].currencyId == "" && Time.time < timedBoosts[i].end) value *= timedBoosts[i].mult;
                 return (float)Math.Min(value, 1e12);
             }
+        }
+
+        // Global multiplier, plus any boosts aimed at this one currency
+        float MultiplierFor(string currencyId)
+        {
+            double value = Multiplier;
+            if (!string.IsNullOrEmpty(currencyId))
+                for (int i = 0; i < timedBoosts.Count; i++)
+                    if (timedBoosts[i].currencyId.Equals(currencyId, StringComparison.OrdinalIgnoreCase) && Time.time < timedBoosts[i].end)
+                        value *= timedBoosts[i].mult;
+            return (float)Math.Min(value, 1e12);
         }
 
         void Update()
@@ -364,6 +384,7 @@ namespace COMP2165.Clicker
             }
             if (gameOver) return;
             for (int i = eventBoostEnds.Count - 1; i >= 0; i--) if (Time.time >= eventBoostEnds[i]) eventBoostEnds.RemoveAt(i);
+            for (int i = timedBoosts.Count - 1; i >= 0; i--) if (Time.time >= timedBoosts[i].end) timedBoosts.RemoveAt(i);
             if (Time.time >= nextTick)
             {
                 nextTick = Time.time + 1;
@@ -371,7 +392,7 @@ namespace COMP2165.Clicker
                 foreach (var row in buildings)
                 {
                     var asset = buildingAssets[row.id]; originals.Add(asset.YieldAmount.Amount);
-                    var value = asset.YieldAmount; value.Amount *= Multiplier * prison.StaffedFraction(row.id); asset.YieldAmount = value;
+                    var value = asset.YieldAmount; value.Amount *= MultiplierFor(row.yieldCurrency) * prison.StaffedFraction(row.id); asset.YieldAmount = value;
                 }
                 manager.Tick();
                 for (int i = 0; i < buildings.Count; i++)
@@ -381,8 +402,9 @@ namespace COMP2165.Clicker
                 foreach (var pair in prison.Tick())
                 {
                     Currency target;
-                    if (!currencyAssets.TryGetValue(pair.Key, out target)) target = currency;   // unknown or blank: supplies
-                    float made = pair.Value * Multiplier;
+                    if (!currencyAssets.TryGetValue(pair.Key, out target)) target = currency;   // unknown or blank: first currency
+                    string targetId = currencyAssets.ContainsKey(pair.Key) ? pair.Key : currencyDefinitions[0].id;
+                    float made = pair.Value * MultiplierFor(targetId);
                     manager.State.CurrencyCurrentTotals[target] = Balance(target) + made;
                     manager.State.CurrencyHistoricalTotals[target] = Historical(target) + made;
                 }
@@ -391,14 +413,12 @@ namespace COMP2165.Clicker
                 if (angry != null && events.Count > 0)
                 {
                     angry.ResetTension();
-                    var next = events[UnityEngine.Random.Range(0, events.Count)];
-                    eventQueue.Add(QueueEvent(next));
-                    PlaySound(string.IsNullOrEmpty(next.sound) ? "event" : next.sound);
+                    TriggerEvent("tension");
                     ShowToast("Tension is boiling over in the " + angry.name + "!");
                 }
             }
-            if (Time.time >= nextEvent && events.Count > 0)
-            { var next = events[UnityEngine.Random.Range(0, events.Count)]; eventQueue.Add(QueueEvent(next)); nextEvent = Time.time + eventInterval; PlaySound(string.IsNullOrEmpty(next.sound) ? "event" : next.sound); }
+            //if (Time.time >= nextEvent && events.Count > 0)
+            //{ var next = events[UnityEngine.Random.Range(0, events.Count)]; eventQueue.Add(QueueEvent(next)); nextEvent = Time.time + eventInterval; PlaySound(string.IsNullOrEmpty(next.sound) ? "event" : next.sound); }
             if (Time.time >= nextGold && !goldVisible)
             { goldVisible = true; nextGold = Time.time + goldInterval; }
             if (Time.time >= nextSave) { SaveProgress(); nextSave = Time.time + 15; }
@@ -416,7 +436,7 @@ namespace COMP2165.Clicker
             {
                 if (row.clickAmount <= 0) continue;
                 var source = clickAssets[row.id];
-                source.Amount = row.clickAmount * Multiplier;
+                source.Amount = row.clickAmount * MultiplierFor(row.id);
                 manager.Click(source);
                 source.Amount = row.clickAmount;
             }
@@ -477,7 +497,7 @@ namespace COMP2165.Clicker
                     prison.SetEfficiency(row.id, 1f);
                     continue;
                 }
-                made *= Multiplier;   // a boost makes more items, so it uses more inputs too
+                made *= MultiplierFor(row.yieldCurrency);   // a boost makes more items, so it uses more inputs too
 
                 // How much of the wanted output can we pay for? 1 = all of it, 0 = none
                 float factor = 1f;
@@ -554,7 +574,7 @@ namespace COMP2165.Clicker
 
         EventData QueueEvent(EventData source)
         {
-            if (source.correctOption != 0) return source;
+            if (source.correctOption != 0 || !string.IsNullOrEmpty(source.effect1) || !string.IsNullOrEmpty(source.effect2)) return source;
             return new EventData
             {
                 title = source.title,
@@ -572,6 +592,15 @@ namespace COMP2165.Clicker
         {
             if (eventQueue.Count == 0) return;
             EventData current = eventQueue[eventQueue.Count - 1];
+            if (!string.IsNullOrEmpty(current.effect1) || !string.IsNullOrEmpty(current.effect2))
+            {
+                string effect = choice == 1 ? current.effect1 : current.effect2;
+                if (!ApplyEffect(effect)) return;   // couldn't afford it: the card stays open
+                eventQueue.RemoveAt(eventQueue.Count - 1);
+                if (eventQueue.Count == 0) eventOpen = false;
+                SaveProgress();
+                return;
+            }
             if (choice == current.correctOption)
             {
                 eventBoostEnds.Add(Time.time + bonusDuration);
@@ -592,6 +621,107 @@ namespace COMP2165.Clicker
             SaveProgress();
         }
 
+        bool ApplyEffect(string effect)
+        {
+            if (string.IsNullOrWhiteSpace(effect)) return true;
+            string[] parts = effect.Split(';');
+
+            // First check the player can afford every cost
+            foreach (string part in parts)
+            {
+                string key; float amount; Currency c;
+                if (!ParseEffect(part, out key, out amount)) continue;
+                if (amount < 0 && currencyAssets.TryGetValue(key, out c) && Balance(c) < -amount)
+                {
+                    ShowToast("Not enough " + c.name + " (need " + Format(-amount) + ").");
+                    return false;
+                }
+            }
+
+            var summary = new List<string>();
+            foreach (string part in parts)
+            {
+                string key; float amount; Currency c;
+
+                // boost=50@30 (global) or boost=50@30@food (one currency)
+                if (part.Trim().StartsWith("boost", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] bkv = part.Split('=');
+                    string[] bval = bkv.Length == 2 ? bkv[1].Split('@') : new string[0];
+                    float percent, seconds;
+                    if (bval.Length >= 2
+                        && float.TryParse(bval[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out percent)
+                        && float.TryParse(bval[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
+                        && seconds > 0)
+                    {
+                        string boostTarget = bval.Length >= 3 ? bval[2].Trim() : "";
+                        if (boostTarget != "" && !currencyAssets.ContainsKey(boostTarget))
+                        {
+                            Debug.LogWarning("Boost names an unknown currency: " + boostTarget);
+                            continue;
+                        }
+                        timedBoosts.Add(new TimedBoost { end = Time.time + seconds, mult = Mathf.Max(0.1f, 1f + percent / 100f), currencyId = boostTarget });
+                        string what = boostTarget == "" ? "production" : currencyAssets[boostTarget].name + " production";
+                        summary.Add((percent >= 0 ? "+" : "") + Format(percent) + "% " + what + " for " + Format(seconds) + "s");
+                    }
+                    else Debug.LogWarning("Bad boost effect (use boost=50@30 or boost=50@30@food): " + part);
+                    continue;
+                }
+
+                // destroy=any or destroy=farm
+                if (part.Trim().StartsWith("destroy", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] dkv = part.Split('=');
+                    string wanted = dkv.Length == 2 ? dkv[1].Trim() : "";
+                    if (wanted.Equals("any", StringComparison.OrdinalIgnoreCase)) wanted = "";
+                    string lost = mapView != null ? mapView.DestroyRandomBuilding(wanted) : "";
+                    summary.Add(lost != "" ? lost + " destroyed" : "nothing to destroy");
+                    continue;
+                }
+
+                if (!ParseEffect(part, out key, out amount)) continue;
+                if (key.Equals("prisoners", StringComparison.OrdinalIgnoreCase))
+                {
+                    int n = amount < 0 ? prison.RemoveRandomPrisoners((int)-amount) : 0;
+                    summary.Add(n + " prisoner(s) exiled");
+                }
+                else if (key.Equals("tension", StringComparison.OrdinalIgnoreCase))
+                {
+                    prison.AddTensionAll(amount);
+                    summary.Add(amount < 0 ? "tension eased" : "tension raised");
+                }
+                else if (key.Equals("all", StringComparison.OrdinalIgnoreCase))
+                {
+                    float fraction = Mathf.Clamp01(Mathf.Abs(amount) / 100f);
+                    foreach (var def in currencyDefinitions)
+                    {
+                        var asset = currencyAssets[def.id];
+                        manager.State.CurrencyCurrentTotals[asset] = Balance(asset) * (1f - fraction);
+                    }
+                    summary.Add(Format(Mathf.Abs(amount)) + "% of every stockpile lost");
+                }
+                else if (currencyAssets.TryGetValue(key, out c))
+                {
+                    manager.State.CurrencyCurrentTotals[c] = Mathf.Max(0, Balance(c) + amount);
+                    if (amount > 0) manager.State.CurrencyHistoricalTotals[c] = Historical(c) + amount;
+                    summary.Add((amount >= 0 ? "+" : "") + Format(amount) + " " + c.name);
+                }
+                else Debug.LogWarning("Unknown event effect: " + part);
+            }
+            ShowToast(string.Join(", ", summary.ToArray()) + ".");
+            PlaySound("success");
+            return true;
+        }
+
+        static bool ParseEffect(string part, out string key, out float amount)
+        {
+            key = ""; amount = 0;
+            string[] kv = part.Split('=');
+            if (kv.Length != 2) return false;
+            key = kv[0].Trim();
+            return float.TryParse(kv[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out amount);
+        }
+
         void ShowToast(string message) { toast = message; toastUntil = Time.time + 4; }
         void EnsureMusic() { if (music != null && music.clip != null && !music.isPlaying) music.Play(); }
         static string Format(float value)
@@ -605,7 +735,7 @@ namespace COMP2165.Clicker
 
         void SaveProgress()
         {
-            if (manager == null) return;
+            if (manager == null || resetting) return;
             var save = new ClickerSave { money = Money, lifetime = Lifetime };
             foreach (var row in currencyDefinitions)
             {
@@ -617,6 +747,8 @@ namespace COMP2165.Clicker
             foreach (var row in upgrades) if (manager.State.EarnedUpgrades.Contains(upgradeAssets[row.id])) save.upgrades.Add(row.id);
             PlayerPrefs.SetString("COMP2165_" + Label("game_id", "clicker"), JsonUtility.ToJson(save));
             if (prison != null) PlayerPrefs.SetString("COMP2165_" + Label("game_id", "clicker") + "_prison", prison.Serialize());
+            SaveRaid();
+            SaveEvents();
             PlayerPrefs.Save();
         }
 
@@ -655,6 +787,61 @@ namespace COMP2165.Clicker
             // Workplaces are normally created in Update(), so create them now so workers have somewhere to go.
             foreach (var row in buildings) prison.SyncWorkplaces(row.id, row.name, BuildingCount(row));
             prison.Load(text);
+        }
+        string RaidKey() { return "COMP2165_" + Label("game_id", "clicker") + "_raid"; }
+
+        void SaveRaid()
+        {
+            if (gameOver) { PlayerPrefs.DeleteKey(RaidKey()); return; }   // a finished game starts fresh next time
+                                                                          // Time.time restarts every run, so store "seconds until the next raid", not the raw time.
+                                                                          // Raiders on the map aren't saved, so a raid in progress restarts after a short delay.
+            float eta = raidActive ? 5f : Mathf.Max(0, nextRaid - Time.time);
+            PlayerPrefs.SetString(RaidKey(),
+                hqHealth.ToString(CultureInfo.InvariantCulture) + "|" + raidsDone + "|" + eta.ToString(CultureInfo.InvariantCulture));
+        }
+
+        void LoadRaid()
+        {
+            string[] f = PlayerPrefs.GetString(RaidKey(), "").Split('|');
+            if (f.Length < 3) return;
+            float health, eta; int done;
+            if (float.TryParse(f[0], NumberStyles.Float, CultureInfo.InvariantCulture, out health)
+                && int.TryParse(f[1], out done)
+                && float.TryParse(f[2], NumberStyles.Float, CultureInfo.InvariantCulture, out eta))
+            {
+                hqHealth = health;
+                raidsDone = done;
+                nextRaid = Time.time + eta;
+            }
+        }
+
+        string EventKey() { return "COMP2165_" + Label("game_id", "clicker") + "_events"; }
+
+        void SaveEvents()
+        {
+            var parts = new List<string>();
+            foreach (var q in eventQueue)
+            {
+                int idx = events.FindIndex(e => e.title == q.title && e.description == q.description);
+                if (idx >= 0) parts.Add(idx + "," + q.correctOption);
+            }
+            PlayerPrefs.SetString(EventKey(), string.Join(";", parts.ToArray()));
+        }
+
+        void LoadEvents()
+        {
+            eventQueue.Clear();
+            foreach (string pair in PlayerPrefs.GetString(EventKey(), "").Split(';'))
+            {
+                string[] p = pair.Split(',');
+                int idx, correct;
+                if (p.Length != 2 || !int.TryParse(p[0], out idx) || !int.TryParse(p[1], out correct)) continue;
+                if (idx < 0 || idx >= events.Count) continue;
+                var source = events[idx];
+                var ev = QueueEvent(source);
+                if (ev != source) ev.correctOption = correct;   // keep the same random answer
+                eventQueue.Add(ev);
+            }
         }
 
         void OnApplicationPause(bool paused) { if (paused && ready) SaveProgress(); }
@@ -984,6 +1171,9 @@ namespace COMP2165.Clicker
 
         float PerSecond(Currency asset)
         {
+            string assetId = "";
+            foreach (var def in currencyDefinitions) if (currencyAssets[def.id] == asset) { assetId = def.id; break; }
+            float boost = MultiplierFor(assetId);
             float total = 0;
             foreach (var owned in manager.State.EarnedBuildings)
             {
@@ -992,7 +1182,7 @@ namespace COMP2165.Clicker
                 string bid = null;
                 foreach (var pair in buildingAssets) if (pair.Value == building) { bid = pair.Key; break; }
                 float staffed = (bid == null || prison == null) ? 1f : prison.StaffedFraction(bid);
-                total += building.YieldAmount.Amount * owned.Value * Multiplier * staffed;
+                total += building.YieldAmount.Amount * owned.Value * boost * staffed;
                 foreach (var upgrade in manager.State.EarnedUpgrades)
                 {
                     foreach (var perk in upgrade.UpgradePerk)
@@ -1014,6 +1204,15 @@ namespace COMP2165.Clicker
         }
         public bool Ready { get { return ready; } }
         public void Notify(string message) { ShowToast(message); }
+        void TriggerEvent(string trigger)
+        {
+            var pool = events.FindAll(e => e.trigger.Equals(trigger, StringComparison.OrdinalIgnoreCase));
+            if (pool.Count == 0) pool = events;   // no matching card: use any, so something still appears
+            if (pool.Count == 0) return;
+            var next = pool[UnityEngine.Random.Range(0, pool.Count)];
+            eventQueue.Add(QueueEvent(next));
+            PlaySound(string.IsNullOrEmpty(next.sound) ? "event" : next.sound);
+        }
         public void SetHqDefense(float d) { hqDefense = d; }
         public bool GameOver { get { return gameOver; } }
 
@@ -1083,6 +1282,7 @@ namespace COMP2165.Clicker
                 }
                 hqHealth -= frac * Setting("raid_damage", 34);
                 ShowToast("Raid " + raidsDone + " broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles.");
+                TriggerEvent("raid");
             }
             if (hqHealth <= 0) { gameOver = true; won = false; }
             else if (raidsDone >= (int)Setting("raids_to_win", 5)) { gameOver = true; won = true; }
@@ -1122,7 +1322,7 @@ namespace COMP2165.Clicker
             float made = w.SuppliesPerSecond();
             if (prison != null && prison.starving && w.yieldCurrency != prison.foodId) made *= prison.starvePenalty;
             if (prison != null) made *= prison.Efficiency(w.typeId);
-            made *= Multiplier;
+            made *= MultiplierFor(w.yieldCurrency);
 
             var sb = new StringBuilder();
             foreach (var line in row.inputs)
@@ -1132,7 +1332,7 @@ namespace COMP2165.Clicker
             }
             return sb.Append("/s").ToString();
         }
-        
+
         public string RateTooltip(int i)
         {
             var def = currencyDefinitions[i];
@@ -1144,7 +1344,7 @@ namespace COMP2165.Clicker
                 {
                     bool known = currencyAssets.ContainsKey(pair.Key);
                     if (pair.Key.Equals(def.id, StringComparison.OrdinalIgnoreCase) || (!known && i == 0))
-                        fromPrisoners += pair.Value * Multiplier;   // blank or unknown output goes to the first currency
+                        fromPrisoners += pair.Value * MultiplierFor(def.id);   // blank or unknown output goes to the first currency
                 }
             }
             float consumed = ConsumedPerSecond(i);
@@ -1154,7 +1354,7 @@ namespace COMP2165.Clicker
             sb.Append("\nBuildings: +").Append(Format(fromBuildings));
             sb.Append("\nPrisoners: +").Append(Format(fromPrisoners));
             if (consumed > 0) sb.Append("\nConsumption: -").Append(Format(consumed));
-            if (Multiplier > 1.01f) sb.Append("\nBoost x").Append(Format(Multiplier)).Append(" active");
+            if (MultiplierFor(def.id) > 1.01f) sb.Append("\nBoost x").Append(Format(MultiplierFor(def.id))).Append(" active");
             return sb.ToString();
         }
         public float GuardRadius { get { return Setting("guard_radius", 250); } }
@@ -1196,6 +1396,21 @@ namespace COMP2165.Clicker
         {
             if (mapView != null) mapView.AskSell();
         }
+
+        // Called by the reset confirmation. Wipes every save key, then reloads the scene.
+        public void ResetGame()
+        {
+            resetting = true;
+            string id = Label("game_id", "clicker");
+            PlayerPrefs.DeleteKey("COMP2165_" + id);             // currencies, buildings, upgrades
+            PlayerPrefs.DeleteKey("COMP2165_" + id + "_prison"); // prisoners and workplaces
+            PlayerPrefs.DeleteKey("COMP2165_" + id + "_slots");  // buildings placed on the map
+            PlayerPrefs.DeleteKey("COMP2165_" + id + "_raid");   // HQ health, raids done, raid timer
+            PlayerPrefs.DeleteKey("COMP2165_" + id + "_events"); // queued event cards
+            PlayerPrefs.Save();
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
         public string GetLabel(string key, string fallback) { return Label(key, fallback); }
 
         BuildingData FindBuilding(string id)
@@ -1255,6 +1470,18 @@ namespace COMP2165.Clicker
             ShowToast("Sold " + row.name + " for " + Format(refund) + " " + costCurrency.name + ".");
             PlaySound("buy");
             SaveProgress();
+            return true;
+        }
+
+        // A disaster removes one building. No refund.
+        public bool DestroyBuilding(string id)
+        {
+            var row = FindBuilding(id);
+            if (row == null) return false;
+            var asset = buildingAssets[row.id];
+            int count = BuildingCount(row);
+            if (count < 1) return false;
+            manager.State.EarnedBuildings[asset] = count - 1;
             return true;
         }
 

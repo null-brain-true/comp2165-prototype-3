@@ -18,6 +18,8 @@ namespace COMP2165.Clicker
         public int intellect;
         public float speed = 50f;
         public float travelLeft = 0f;
+        public int number;         // shown as No. 042
+        public string crime = "";  // picked from Crimes.csv
 
         public Prisoner(Faction faction, int strength, int agility, int intellect)
         {
@@ -36,6 +38,11 @@ namespace COMP2165.Clicker
                 case StatType.Agility: return agility;
                 default: return intellect;
             }
+        }
+        
+        public string Label()
+        {
+            return "No. " + number.ToString("000");
         }
     }
 

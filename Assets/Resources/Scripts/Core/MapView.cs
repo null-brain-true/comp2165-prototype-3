@@ -413,6 +413,32 @@ namespace COMP2165.Clicker
             confirmPanel.SetActive(true);
         }
 
+        // Destroys a random placed building (blank typeId = any). Returns its name, or "" if there was none.
+        public string DestroyRandomBuilding(string typeId)
+        {
+            var candidates = new List<Slot>();
+            foreach (var s in slots)
+            {
+                if (s.occupant == "") continue;
+                if (typeId != "" && !s.occupant.Equals(typeId, StringComparison.OrdinalIgnoreCase)) continue;
+                candidates.Add(s);
+            }
+            if (candidates.Count == 0) return "";
+
+            Slot hit = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            string type = hit.occupant;
+            string buildingName = game.BuildingName(type);
+            Workplace place = WorkplaceFor(hit);   // work this out before the slot is cleared
+
+            if (!game.DestroyBuilding(type)) return "";
+            if (place != null) game.Prison.RemoveWorkplace(place);
+            hit.occupant = "";
+            if (openSlot == hit) openSlot = null;
+            if (game.SelectedWorkplace == place) game.SelectedWorkplace = null;
+            Save();
+            return buildingName;
+        }
+
         // Which Workplace (the object that holds the workers) belongs to this map slot?
         // The 1st Farm slot is the 1st Farm workplace, the 2nd Farm slot is the 2nd one, and so on.
         Workplace WorkplaceFor(Slot target)
@@ -437,10 +463,9 @@ namespace COMP2165.Clicker
         {
             if (pendingSell != null && pendingSell.occupant != "")
             {
-                if (game.SellPlacedBuilding(pendingSell.occupant)) { pendingSell.occupant = ""; Save(); }
+                if (game.SellPlacedBuilding(pendingSell.occupant)) { pendingSell.occupant = ""; game.SelectedWorkplace = null; Save(); }
             }
             CancelSell();
-            if (game.SellPlacedBuilding(pendingSell.occupant)) { pendingSell.occupant = ""; game.SelectedWorkplace = null; Save(); }
         }
 
         void CancelSell()

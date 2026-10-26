@@ -1,5 +1,9 @@
-Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency
-Factory fire,A fire breaks out in the cookie factory. What do you do?,Call emergency services,Ignore it and keep baking,0,event_fire,event,supplies
-Broken oven,The main oven stops working during a busy shift.,Schedule a repair,Turn up the heat anyway,0,event_oven,event,supplies
-Supplier issue,Your flour delivery is late. Customers are waiting.,Contact a backup supplier,Promise stock you do not have,0,event_supplier,event,supplies
-Quality alert,A batch of cookies may be contaminated.,Recall and inspect the batch,Ship it before anyone notices,0,event_quality,event,supplies
+Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency,Trigger,Option 1 Effect,Option 2 Effect
+Camp Brawl,A fight has broken out between the prisoners. What do you do?,Exile the offenders,Throw a feast ,0,event_brawl,event,supplies,tension,prisoners =-2,supplies=-30; food=-20
+Harvest Festivel,Prisoners made farming look fun.,Let them celebrate,Work it through,0,event_harvest,event,supplies,tension,boost=50@30@food,boost=-20@20@food
+Fire,Lightning struck the camp and something is burning.,Fight the fire,Let it burn,0,event_fire,event,supplies,tension,supplies=-40,destroy=any
+Competition,Prisoners are pumped up and wants to show whos boss.,Let them compete,Shut it down,0,event_competition,event,supplies,tension,boost=40@30,boost=-30@20
+Locusts,A swarm decends on the farms.,Burn the swarms,Hope they leave,0,event_locust,event,supplies,raid,boost=-30@20,destroy=farm
+Earthquake,The ground shakes and two building learn gravity exist.,Pray,Find a scapegoat,0,event_quake,event,supplies,raid,destroy=any; destroy=any,destroy=any; destroy=any; prisoners=-1
+Raiders,Monsters have broken into the camp. What do you do?,Evacuate prisoners,Try to save the resources ,0,event_raid,event,supplies,raid,all=-10,prisoners =-5
+Disease,A disease has broken out in the camp.,Quarrantine the infected,Let the infected die,0,event_disease,event,supplies,raid,supplies=-50,prisoners=-3;tension=1
