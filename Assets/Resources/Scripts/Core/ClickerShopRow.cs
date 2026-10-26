@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 namespace COMP2165.Clicker
 {
+    public class CostEntry { public string amount, name; public Texture2D icon; }
     public class ClickerShopRow : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         public RawImage icon;
@@ -75,6 +77,92 @@ namespace COMP2165.Clicker
         void OnDisable()
         {
             if (tooltip != null) tooltip.Hide();
+        }
+
+        class CostSlot { public GameObject root; public Text amount; public RawImage icon; }
+        readonly List<CostSlot> costSlots = new List<CostSlot>();
+        RectTransform costStrip;
+
+        // Plain text on the button (LOCKED, OWNED, CANCEL...). Hides the icon strip.
+        public void SetActionText(string text)
+        {
+            if (costStrip != null) costStrip.gameObject.SetActive(false);
+            SetRect(actionText.rectTransform, 4f, 3f, 94f, 54f);
+            actionText.text = text;
+        }
+
+        // "BUY" on top, then one [amount][icon] pair per cost underneath.
+        public void SetCosts(string header, List<CostEntry> costs)
+        {
+            EnsureStrip();
+            SetRect(actionText.rectTransform, 4f, 2f, 94f, 24f);
+            actionText.text = header;
+            costStrip.gameObject.SetActive(true);
+            while (costSlots.Count < costs.Count) costSlots.Add(NewSlot());
+            for (int i = 0; i < costSlots.Count; i++)
+            {
+                bool used = i < costs.Count;
+                costSlots[i].root.SetActive(used);
+                if (!used) continue;
+                bool hasIcon = costs[i].icon != null;
+                costSlots[i].icon.gameObject.SetActive(hasIcon);
+                costSlots[i].icon.texture = costs[i].icon;
+                costSlots[i].amount.text = hasIcon ? costs[i].amount : costs[i].amount + " " + costs[i].name;
+            }
+        }
+
+        void EnsureStrip()
+        {
+            if (costStrip != null) return;
+            var go = new GameObject("Cost Strip", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            go.layer = LayerMask.NameToLayer("UI");
+            costStrip = go.GetComponent<RectTransform>();
+            costStrip.SetParent(action.transform, false);
+            costStrip.anchorMin = new Vector2(0f, 0f);
+            costStrip.anchorMax = new Vector2(1f, 0f);
+            costStrip.pivot = new Vector2(0.5f, 0f);
+            costStrip.anchoredPosition = new Vector2(0f, 3f);
+            costStrip.sizeDelta = new Vector2(-6f, 28f);
+            var layout = go.GetComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = 6f;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+        }
+
+        CostSlot NewSlot()
+        {
+            var slot = new CostSlot();
+            var root = new GameObject("Cost", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            root.layer = LayerMask.NameToLayer("UI");
+            root.transform.SetParent(costStrip, false);
+            var layout = root.GetComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = 2f;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+            slot.root = root;
+
+            var textGo = new GameObject("Amount", typeof(RectTransform), typeof(Text));
+            textGo.layer = LayerMask.NameToLayer("UI");
+            textGo.transform.SetParent(root.transform, false);
+            slot.amount = textGo.GetComponent<Text>();
+            slot.amount.font = actionText.font;
+            slot.amount.fontSize = 14;
+            slot.amount.color = actionText.color;
+            slot.amount.alignment = TextAnchor.MiddleCenter;
+            slot.amount.horizontalOverflow = HorizontalWrapMode.Overflow;
+            slot.amount.raycastTarget = false;
+
+            var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(RawImage), typeof(LayoutElement));
+            iconGo.layer = LayerMask.NameToLayer("UI");
+            iconGo.transform.SetParent(root.transform, false);
+            slot.icon = iconGo.GetComponent<RawImage>();
+            slot.icon.raycastTarget = false;
+            var le = iconGo.GetComponent<LayoutElement>();
+            le.preferredWidth = le.preferredHeight = 20f;
+            slot.icon.color = Color.white;
+            return slot;
         }
     }
 }

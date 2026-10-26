@@ -240,7 +240,7 @@ namespace COMP2165.Clicker
             nextEvent = Time.time + eventInterval;
             nextGold = Time.time + goldInterval;
             nextSave = Time.time + 15;
-            nextRaid = Time.time + Setting("raid_first_seconds", 60);
+            nextRaid = Time.time + Setting("raid_first_seconds", 120);
             hqHealth = Setting("hq_max_health", 100);
             LoadRaid();
             LoadEvents();
@@ -1135,14 +1135,23 @@ namespace COMP2165.Clicker
                 row.tooltipText = string.IsNullOrWhiteSpace(data.tooltip) ? string.Empty : data.name + "\n" + data.tooltip + (unlocked ? "" : "\nUnlock at " + Format(data.unlockAt) + " lifetime " + unlockCurrency.name);
                 if (data.inputs.Count > 0) row.tooltipText += "\nProduces 1 " + currencyAssets[data.yieldCurrency].name + " for " + InputText(data).Trim().Replace("\n", ", ");
                 row.action.interactable = unlocked && (sellingBuildings ? count >= buildingBatch : Balance(costCurrency) >= value && MissingExtra(data, count) == "");
-                row.actionText.text = !unlocked ? "LOCKED" : sellingBuildings && count < buildingBatch ? "NEED " + buildingBatch : (sellingBuildings ? "SELL\n" : "BUY\n") + Format(value) + " " + costCurrency.name;
-                if (!sellingBuildings && unlocked && data.extraCosts.Count > 0) row.actionText.text += ExtraCostText(data, count);
+
                 bool armedRow = ArmedBuilding == data.id;
+                if (!unlocked) row.SetActionText("LOCKED");
+                else if (armedRow) row.SetActionText("CANCEL\n(pick a slot)");
+                else if (sellingBuildings && count < buildingBatch) row.SetActionText("NEED " + buildingBatch);
+                else
+                {
+                    var costs = new List<CostEntry> { MakeCost(value, data.costCurrency) };
+                    if (!sellingBuildings)
+                        foreach (var line in data.extraCosts) costs.Add(MakeCost(ExtraCostAmount(line, count), line.currencyId));
+                    row.SetCosts(sellingBuildings ? "SELL" : "BUY", costs);
+                }
+
                 var rowImage = row.GetComponent<Image>();
                 Color normalRow;
                 if (rowImage != null && rowColors.TryGetValue(data.id, out normalRow))
                     rowImage.color = armedRow ? new Color(1f, 0.85f, 0.3f) : normalRow;
-                if (armedRow && unlocked) row.actionText.text = "CANCEL\n(pick a slot)";
             }
             foreach (var data in upgrades)
             {
@@ -1158,7 +1167,9 @@ namespace COMP2165.Clicker
                 row.title.text = data.name;
                 row.tooltipText = string.IsNullOrWhiteSpace(data.tooltip) ? string.Empty : data.name + "\n" + data.tooltip + (unlocked ? "" : "\nUnlock at " + Format(data.unlockAt) + " lifetime " + unlockCurrency.name);
                 row.action.interactable = !purchased && unlocked && Balance(costCurrency) >= data.cost;
-                row.actionText.text = purchased ? "OWNED" : unlocked ? "BUY\n" + Format(data.cost) + " " + costCurrency.name : "LOCKED";
+                if (purchased) row.SetActionText("OWNED");
+                else if (!unlocked) row.SetActionText("LOCKED");
+                else row.SetCosts("BUY", new List<CostEntry> { MakeCost(data.cost, data.costCurrency) });
             }
 
             bool showEvent = eventOpen && eventQueue.Count > 0;
@@ -1503,6 +1514,16 @@ namespace COMP2165.Clicker
             int count = BuildingCount(row);
             if (count < 1) return 0;
             return (float)((int)row.cost * Math.Pow(1 + manager.Config.BuildingCostIncrease, count - 1) * sellRefund);
+        }
+
+        CostEntry MakeCost(float amount, string currencyId)
+        {
+            return new CostEntry
+            {
+                amount = Format(amount),
+                name = currencyAssets[currencyId].name,
+                icon = Image("res_" + currencyId) ?? Image(currencyId)
+            };
         }
     }
 }

@@ -39,7 +39,7 @@ namespace COMP2165.Clicker
                 default: return intellect;
             }
         }
-        
+
         public string Label()
         {
             return "No. " + number.ToString("000");
@@ -67,6 +67,7 @@ namespace COMP2165.Clicker
         const float TensionPerWorkerPerSecond = 0.05f;
         const float GuardPerWorker = 0.15f;
         const float GuardPerStrength = 0.03f;
+        const float SameFactionTensionMultiplier = 4f;   // same-faction buildings rise this many times faster
 
         public string name;
         public string typeId;       // which building type (the id in Buildings.csv) this one is
@@ -132,12 +133,15 @@ namespace COMP2165.Clicker
             return total;
         }
 
-        // Call once per second. Only same-faction buildings build tension.
+        // Call once per second. Every worker adds a little base tension. Same-faction groups add extra.
         public void TickTension(bool starving = false)
         {
             if (isGuard || workers.Count == 0) return;
-            if (!starving && !AllSameFaction()) return;   // normally only same-faction buildings build tension
-            tension += workers.Count * TensionPerWorkerPerSecond * (starving ? 3f : 1f) * guardFactor;
+
+            float gain = workers.Count * TensionPerWorkerPerSecond;   // always rises
+            if (AllSameFaction()) gain *= SameFactionTensionMultiplier;
+
+            tension += gain * (starving ? 3f : 1f) * guardFactor;
         }
 
         public void ResetTension()
