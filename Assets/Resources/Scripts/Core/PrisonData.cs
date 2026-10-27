@@ -64,10 +64,10 @@ namespace COMP2165.Clicker
         const float SameFactionBonus = 1.25f;
         const float MixedFactionPenalty = 0.9f;
         const float StatToSupplies = 0.1f;
-        const float TensionPerWorkerPerSecond = 0.05f;
+        const float TensionPerWorkerPerSecond = 0.01f;
         const float GuardPerWorker = 0.15f;
         const float GuardPerStrength = 0.03f;
-        const float SameFactionTensionMultiplier = 4f;   // same-faction buildings rise this many times faster
+        const float SameFactionTensionMultiplier = 2f;   // same-faction buildings rise this many times faster
 
         public string name;
         public string typeId;       // which building type (the id in Buildings.csv) this one is
