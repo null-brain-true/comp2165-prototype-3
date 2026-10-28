@@ -17,7 +17,7 @@ namespace COMP2165.Clicker
         public float costGrowth = 0.15f;      // each extra prisoner costs this much more
         public float prisonerBaseCost = 25f;  // price of the first ordered prisoner
         public float defaultSpeed = 50f;
-        public string guardTypeId = "watchtower";
+        public List<string> guardTypeIds = new List<string> { "watchtower" };
         public int nextNumber = 1;
         public List<string> crimes = new List<string>();
         public string foodId = "food";   // starvation never cuts food output, so a famine can recover
@@ -68,6 +68,24 @@ namespace COMP2165.Clicker
             }
         }
 
+        public bool IsGuardType(string id)
+        {
+            for (int i = 0; i < guardTypeIds.Count; i++)
+                if (guardTypeIds[i].Equals(id, System.StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        // "watchtower|spelltower|roadblock"
+        public void SetGuardTypes(string text)
+        {
+            guardTypeIds.Clear();
+            foreach (string part in text.Split('|'))
+            {
+                string t = part.Trim();
+                if (t != "") guardTypeIds.Add(t);
+            }
+        }
+
         // ----- Buildings -----
 
         // True if Workplaces.csv has a row with this id.
@@ -105,7 +123,7 @@ namespace COMP2165.Clicker
                 Workplace w = new Workplace(displayName + " " + have, t.mainStat, t.baseSupplies, t.capacity);
                 w.typeId = typeId;
                 w.yieldCurrency = t.yieldCurrency;
-                w.isGuard = typeId.ToLower() == guardTypeId.ToLower();
+                w.isGuard = IsGuardType(typeId);
                 workplaces.Add(w);
                 version++;
             }
@@ -128,6 +146,15 @@ namespace COMP2165.Clicker
             }
         }
 
+        public Dictionary<string, float> typeMultiplier = new Dictionary<string, float>();
+
+        public void SetTypeMultiplier(string typeId, float m) { typeMultiplier[typeId] = m; }
+
+        public float TypeMultiplier(string typeId)
+        {
+            float v;
+            return typeMultiplier.TryGetValue(typeId, out v) ? v : 1f;
+        }
         // A building destroyed by a disaster. Its workers go back to the waiting list.
         public void RemoveWorkplace(Workplace w)
         {
@@ -209,6 +236,7 @@ namespace COMP2165.Clicker
             {
                 Workplace w = workplaces[i];
                 float made = w.SuppliesPerSecond();
+                made *= TypeMultiplier(w.typeId);
                 made *= Efficiency(w.typeId);
                 if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
                 if (made > 0)
@@ -453,6 +481,7 @@ namespace COMP2165.Clicker
             {
                 Workplace w = workplaces[i];
                 float made = w.SuppliesPerSecond();
+                made *= TypeMultiplier(w.typeId);
                 if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
                 float have;
                 output.TryGetValue(w.typeId, out have);
@@ -481,6 +510,7 @@ namespace COMP2165.Clicker
             {
                 Workplace w = workplaces[i];
                 float made = w.SuppliesPerSecond();
+                made *= TypeMultiplier(w.typeId);
                 made *= Efficiency(w.typeId);
                 if (starving && w.yieldCurrency != foodId) made *= starvePenalty;
                 if (made <= 0) continue;

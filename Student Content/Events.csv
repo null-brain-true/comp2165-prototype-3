@@ -1,9 +1,9 @@
 Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency,Trigger,Option 1 Effect,Option 2 Effect
-Camp Brawl,A fight has broken out between the prisoners. What do you do?,Exile the offenders,Throw a feast ,0,event_brawl,event,supplies,tension,prisoners =-2,supplies=-30; food=-20
-Harvest Festivel,Prisoners made farming look fun.,Let them celebrate,Work it through,0,event_harvest,event,supplies,tension,boost=50@30@food,boost=-20@20@food
-Fire,Lightning struck the camp and something is burning.,Fight the fire,Let it burn,0,event_fire,event,supplies,tension,supplies=-40,destroy=any
-Competition,Prisoners are pumped up and wants to show whos boss.,Let them compete,Shut it down,0,event_competition,event,supplies,tension,boost=40@30,boost=-30@20
-Locusts,A swarm decends on the farms.,Burn the swarms,Hope they leave,0,event_locust,event,supplies,raid,boost=-30@20,destroy=farm
-Earthquake,The ground shakes and two building learn gravity exist.,Pray,Find a scapegoat,0,event_quake,event,supplies,raid,destroy=any; destroy=any,destroy=any; destroy=any; prisoners=-1
-Raiders,Monsters have broken into the camp. What do you do?,Evacuate prisoners,Try to save the resources ,0,event_raid,event,supplies,raid,all=-10,prisoners =-5
-Disease,A disease has broken out in the camp.,Quarrantine the infected,Let the infected die,0,event_disease,event,supplies,raid,supplies=-50,prisoners=-3;tension=1
+Camp Brawl,A fight has broken out between the prisoners. What do you do?,Send them on trade runs,Throw a feast ,0,brawl,event,supplies,tension,boost=50@30@supplies;boost=-30@30@food,boost=50@30@food;boost=-30@30@supplies
+Harvest Festivel,Prisoners made farming look fun.,Let them celebrate,Work it through,0,festivel,event,supplies,tension,boost=50@30@food;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@food
+Fire,Lightning struck the camp and something is burning.,Salvage timber,Save the workshop,0,fire,event,supplies,tension,boost=50@30@wood;boost=-30@30@planks,boost=50@30@planks;boost=-30@30@wood
+Competition,Prisoners are pumped up and wants to show whos boss.,Mining Contest,Logging Contest,0,competition,event,supplies,tension,boost=50@30@ore;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@ore
+Locusts,A swarm decends on the farms.,Burn the swarms,Wait it out,0,locust,event,supplies,raid,wood=-15,boost=-40@30@food
+Earthquake,The ground shakes and two building learn gravity exist.,Brace the buildings,Ride it out,0,earthquake,event,supplies,raid,wood=-25,destroy=any
+Raiders,Monsters have broken into the camp. What do you do?,Bribe them,Fight them off,0,raid,event,supplies,raid,supplies=-25,prisoners=-1
+Disease,A disease has broken out in the camp.,Quarrantine the infected,Push through it,0,disease,event,supplies,raid,supplies=-20,boost=-25@30

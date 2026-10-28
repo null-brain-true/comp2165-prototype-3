@@ -114,15 +114,14 @@ namespace COMP2165.Clicker
             header.icon.texture = game.BuildingIcon(place.typeId);
             header.icon.color = Color.white;
 
-            Button assignButton = header.action;
-            Text assignText = header.actionText;
-            Button demolishButton = Instantiate(assignButton, assignButton.transform.parent);   // a copy of the same button
+            Button repairButton = header.action;
+            Text repairText = header.actionText;
+            Button demolishButton = Instantiate(repairButton, repairButton.transform.parent);   // a copy of the same button
             Text demolishText = demolishButton.GetComponentInChildren<Text>(true);
-            PlaceButton(assignButton, assignText, 188f, 14f, 102f, 56f);
+            PlaceButton(repairButton, repairText, 188f, 14f, 102f, 56f);
             PlaceButton(demolishButton, demolishText, 188f, 78f, 102f, 56f);
-            assignText.text = "ASSIGN";
             demolishText.text = "DEMOLISH";
-            assignButton.onClick.AddListener(() => AssignHere(place));
+            repairButton.onClick.AddListener(() => game.RepairSelected());
             demolishButton.onClick.AddListener(() => game.AskSellSelected());
 
             headerPlaces.Add(place);
@@ -181,7 +180,7 @@ namespace COMP2165.Clicker
             Texture2D sprite = game.GetImage(SpriteKey(p.faction));
             row.icon.texture = sprite;
             row.icon.color = sprite != null ? Color.white : FactionColor(p.faction);
-            row.title.text = p.Label() + "  " + p.faction + "\nSTR " + p.strength + " AGI " + p.agility + " INT " + p.intellect + "\nCrime: " + p.crime;
+            row.title.text = p.Label() + "  " + p.faction + "\nSTR " + p.strength + "  AGI " + p.agility + "\nINT " + p.intellect + "\nCrime: " + p.crime;
             //row.tooltip = game.Tooltip;
             //row.tooltipText = p.Label() + "\n" + p.faction + "\nCrime: " + p.crime;
         }
@@ -201,6 +200,7 @@ namespace COMP2165.Clicker
                 Workplace p = headerPlaces[i];
                 ClickerShopRow row = headerRows[i];
                 row.title.text = p.name
+                    + "\nHP " + game.BuildingHpText(p)
                     + "\n" + p.mainStat + "  " + p.workers.Count + "/" + p.capacity
                     + "\n+" + p.SuppliesPerSecond().ToString("0.0") + "/s"
                     + "\nTension " + p.tension.ToString("0.0") + "/" + prison.tensionThreshold.ToString("0")
@@ -208,7 +208,8 @@ namespace COMP2165.Clicker
                     + (p.isGuard ? "\nGuard power " + p.GuardPower().ToString("0.00") : "")
                     + (!p.isGuard && !p.IsStaffed() ? "\nIDLE: no workers" : "")
                     + (!p.isGuard && prison.Efficiency(p.typeId) < 1f ? "\nSHORT ON INPUTS" : "");
-                row.action.interactable = game.SelectedPrisoner != null && p.workers.Count < p.capacity;
+                row.action.interactable = game.CanRepair(p);
+                row.actionText.text = game.RepairButtonText(p);
             }
 
             float cost = prison.PrisonerCost();
@@ -227,7 +228,7 @@ namespace COMP2165.Clicker
         {
             if (f == Faction.Republic) return new Color(0.3f, 0.5f, 0.9f);    // blue
             if (f == Faction.Imperium) return new Color(0.85f, 0.3f, 0.3f);   // red
-            return new Color(0.92f, 0.78f, 0.25f);                              // green (Federacy)
+            return new Color(0.92f, 0.78f, 0.25f);                              // yellow (Federacy)
         }
     }
 }

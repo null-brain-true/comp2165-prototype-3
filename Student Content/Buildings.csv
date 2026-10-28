@@ -1,8 +1,10 @@
 id,name,description,base_cost,per_second,unlock_at,image,tooltip,cost_currency,yield_currency,unlock_currency,input_currency,input_amount
-farm,Farm,Grow Food,10,0,0,farm,Grows food for camp,supplies,food,supplies,,
-lumber_mill,Lumber Mill,Get Wood,10,0,0,lumber_mill,"Produces supplies, suited for prisoners with Agility",supplies,wood,supplies,,
-mine,Mine,Get Ores,10,0,0,mine,"Produces supplies, suited for prisoners with Strength",supplies,ore,supplies,,
-workshop,Workshop,Turn timber into planks,40,0,0,workshop,Turn timber into planks,wood,planks,wood,wood,2
-watchtower,Watchtower,Guards the camp,30,0,0,watchtower,Guards the camp,planks,supplies,planks,,
-smithy,Smithy,Smelt ores into bars,40|20|10,0,0,smithy,Makes iron bars,ore|planks|supplies,bars,ore,ore|wood,1|2
-trading_post,Trading Post,Bring supplies from trade,30,0,0,tradepost,Bring supplies from trade,,,,,
+farm,Farm,Grow Food,10,0,0,farm,Grows food. Gains bonus from Intellect.,supplies,food,supplies,,
+lumber_mill,Lumber Mill,Get Wood,10,0,0,lumber_mill,Produces wood. Gains bonus from Agility.,supplies,wood,supplies,,
+mine,Mine,Get Ores,10,0,0,mine,Produces ore. Gains bonus from Strength.,supplies,ore,supplies,,
+watchtower,Watchtower,Defends the camp,30,0,0,watchtower,Defense structure. Gains bonus from Agility. Counters Scouts.,wood,supplies,supplies,,
+spelltower,Spelltower,Defends the camp,30,0,0,spelltower,Defense structure. Gains bonus from Intellect. Counters Wraiths.,planks,supplies,supplies,,
+checkpoint,Checkpoint,Defends the camp,30,0,0,checkpoint,Defense structure. Gains bonus from Strength. Counters Brutes.,bars,supplies,supplies,,
+workshop,Workshop,Turn timber into planks,40|25,0,0,workshop,Turns wood into planks. Gains bonus from Agility.,wood|supplies,planks,supplies,wood,2
+smithy,Smithy,Smelt ores into bars,40|20|10,0,0,smithy,Smelts ore and wood into bars. Grains bonus from Strength.,ore|planks|supplies,bars,ore,ore|wood,1|3
+trading_post,Trading Post,Bring supplies from trade,10|20|30,0,0,tradepost,Trades for supplies. Gains bonus from Intellect.,bars|planks|supplies,supplies,supplies,food|wood|ore,1|1|1

@@ -31,6 +31,7 @@ namespace COMP2165.Clicker
         readonly List<EventData> events = new List<EventData>();
         readonly List<EventData> eventQueue = new List<EventData>();
         readonly List<float> eventBoostEnds = new List<float>();
+        readonly List<EnemyType> enemyTypes = new List<EnemyType>();
         class TimedBoost { public float end, mult; public string currencyId = ""; }
         readonly List<TimedBoost> timedBoosts = new List<TimedBoost>();   // currencyId "" = global boost
         readonly Dictionary<string, Building> buildingAssets = new Dictionary<string, Building>();
@@ -100,7 +101,7 @@ namespace COMP2165.Clicker
 
         IEnumerator LoadGame()
         {
-            string[] tables = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio", "Palette", "Workplaces", "Crimes" };
+            string[] tables = { "Settings", "Currencies", "Buildings", "Upgrades", "Events", "Visuals", "Audio", "Palette", "Workplaces", "Crimes", "Enemies" };
             var loaded = new Dictionary<string, List<Dictionary<string, string>>>();
             foreach (string table in tables)
             {
@@ -178,6 +179,30 @@ namespace COMP2165.Clicker
                 if (string.IsNullOrEmpty(item.id) || item.amount <= 0) { error = "Invalid Upgrades.csv row."; yield break; }
                 upgrades.Add(item);
             }
+
+            foreach (var row in loaded["Enemies"])
+            {
+                var item = new EnemyType
+                {
+                    id = Csv.Get(row, "id"),
+                    name = Csv.Get(row, "name"),
+                    image = Csv.Get(row, "image", "monster"),
+                    tint = Csv.Get(row, "tint"),
+                    health = Csv.Number(row, "health", 3),
+                    speed = Csv.Number(row, "speed", 60),
+                    damage = Csv.Number(row, "damage", Setting("monster_damage", 2)),
+                    weakTo = Csv.Get(row, "weak_to"),
+                    weakMultiplier = Csv.Number(row, "weak_multiplier", 2),
+                    firstRaid = (int)Csv.Number(row, "first_raid", 0)
+                };
+                if (string.IsNullOrEmpty(item.id) || item.health <= 0) { error = "Invalid Enemies.csv row."; yield break; }
+                if (item.weakTo != "" && !buildings.Exists(b => b.id.Equals(item.weakTo, StringComparison.OrdinalIgnoreCase)))
+                    Debug.LogWarning("Enemies.csv: " + item.id + " is weak to unknown building " + item.weakTo);
+                enemyTypes.Add(item);
+            }
+            if (enemyTypes.Count == 0)
+                enemyTypes.Add(new EnemyType { id = "raider", name = "Raider", image = "monster", tint = "", weakTo = "", health = 3, speed = 60, damage = 2, weakMultiplier = 1, firstRaid = 0 });
+
             foreach (var row in loaded["Events"])
             {
                 int correctOption;
@@ -215,6 +240,7 @@ namespace COMP2165.Clicker
             prison.prisonerBaseCost = Setting("prisoner_base_cost", 5);
             prison.costGrowth = Setting("building_cost_growth_percent", 15) / 100f;
             prison.defaultSpeed = Setting("prisoner_default_speed", 50);
+            prison.SetGuardTypes(Label("guard_buildings", "watchtower|spelltower|roadblock"));
             prison.SetCrimes(loaded["Crimes"]);
             foreach (var row in buildings)
             {
@@ -243,6 +269,7 @@ namespace COMP2165.Clicker
             nextRaid = Time.time + Setting("raid_first_seconds", 120);
             hqHealth = Setting("hq_max_health", 100);
             LoadRaid();
+            PlanWave();
             LoadEvents();
             shopTooltip = ClickerTooltip.Ensure(ui);
             ClickerPalette.Apply(ui, loaded["Palette"]);
@@ -355,6 +382,44 @@ namespace COMP2165.Clicker
         float Money { get { return Balance(currency); } }
         float Lifetime { get { return Historical(currency); } }
         public float Supplies() { return Balance(currency); }
+        public float GetSetting(string key, float fallback) { return Setting(key, fallback); }
+        public List<EnemyType> EnemyTypes { get { return enemyTypes; } }
+        public int RaidsDone { get { return raidsDone; } }
+
+        // Cost to repair: a percentage of the building's base cost, scaled by how damaged it is
+        public float RepairCostFor(string id, float missingFraction)
+        {
+            var row = FindBuilding(id);
+            if (row == null) return 0;
+            return Mathf.Max(1f, Mathf.Ceil(row.cost * missingFraction * Setting("repair_cost_percent", 50) / 100f));
+        }
+
+        public string RepairCurrencyName(string id)
+        {
+            var row = FindBuilding(id);
+            return row == null ? "" : buildingAssets[row.id].Cost.Currency.name;
+        }
+
+        public bool TrySpendRepair(string id, float amount)
+        {
+            var row = FindBuilding(id);
+            if (row == null) return false;
+            var costCurrency = buildingAssets[row.id].Cost.Currency;
+            if (Balance(costCurrency) < amount)
+            {
+                ShowToast("Not enough " + costCurrency.name + " to repair.");
+                return false;
+            }
+            manager.State.CurrencyCurrentTotals[costCurrency] = Balance(costCurrency) - amount;
+            PlaySound("buy");
+            return true;
+        }
+
+        // Passthroughs so PrisonPanelView can reach MapView
+        public string BuildingHpText(Workplace w) { return mapView == null ? "" : mapView.HpText(w); }
+        public string RepairButtonText(Workplace w) { return mapView == null ? "REPAIR" : mapView.RepairText(w); }
+        public bool CanRepair(Workplace w) { return mapView != null && mapView.CanRepair(w); }
+        public void RepairSelected() { if (mapView != null) mapView.Repair(); }
 
         public bool TrySpend(float amount)
         {
@@ -398,6 +463,7 @@ namespace COMP2165.Clicker
             if (Time.time >= nextTick)
             {
                 nextTick = Time.time + 1;
+                ApplyUpgradeMultipliers();
                 var originals = new List<float>();
                 foreach (var row in buildings)
                 {
@@ -634,19 +700,13 @@ namespace COMP2165.Clicker
         bool ApplyEffect(string effect)
         {
             if (string.IsNullOrWhiteSpace(effect)) return true;
+
+            // First check the player can afford every cost
             string[] parts = effect.Split(';');
 
             // First check the player can afford every cost
-            foreach (string part in parts)
-            {
-                string key; float amount; Currency c;
-                if (!ParseEffect(part, out key, out amount)) continue;
-                if (amount < 0 && currencyAssets.TryGetValue(key, out c) && Balance(c) < -amount)
-                {
-                    ShowToast("Not enough " + c.name + " (need " + Format(-amount) + ").");
-                    return false;
-                }
-            }
+            string missing = MissingCost(effect);
+            if (missing != "") { ShowToast("Not enough " + missing + "."); return false; }
 
             var summary = new List<string>();
             foreach (string part in parts)
@@ -732,7 +792,69 @@ namespace COMP2165.Clicker
             return float.TryParse(kv[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out amount);
         }
 
+        // "wood=-20;boost=50@30@ore" -> "-20 Wood, +50% Ore 30s"
+        string EffectPreview(string effect)
+        {
+            if (string.IsNullOrWhiteSpace(effect)) return "";
+            var bits = new List<string>();
+            foreach (string raw in effect.Split(';'))
+            {
+                string part = raw.Trim();
+                if (part == "") continue;
+                string key; float amount; Currency c;
+
+                if (part.StartsWith("boost", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] kv = part.Split('=');
+                    string[] b = kv.Length == 2 ? kv[1].Split('@') : new string[0];
+                    float pct, sec;
+                    if (b.Length >= 2
+                        && float.TryParse(b[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out pct)
+                        && float.TryParse(b[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out sec))
+                    {
+                        string target = b.Length >= 3 && currencyAssets.TryGetValue(b[2].Trim(), out c) ? c.name : "All";
+                        bits.Add((pct >= 0 ? "+" : "") + Format(pct) + "% " + target + " " + Format(sec) + "s");
+                    }
+                    continue;
+                }
+                if (part.StartsWith("destroy", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] kv = part.Split('=');
+                    string wanted = kv.Length == 2 ? kv[1].Trim() : "any";
+                    bits.Add(wanted.Equals("any", StringComparison.OrdinalIgnoreCase) ? "Lose a building" : "Lose a " + BuildingName(wanted));
+                    continue;
+                }
+                if (!ParseEffect(part, out key, out amount)) continue;
+                if (key.Equals("prisoners", StringComparison.OrdinalIgnoreCase)) bits.Add(Format(amount) + " prisoner" + (Mathf.Abs(amount) == 1 ? "" : "s"));
+                else if (key.Equals("tension", StringComparison.OrdinalIgnoreCase)) bits.Add(amount < 0 ? "Tension down" : "Tension up");
+                else if (key.Equals("all", StringComparison.OrdinalIgnoreCase)) bits.Add("-" + Format(Mathf.Abs(amount)) + "% all stock");
+                else if (currencyAssets.TryGetValue(key, out c)) bits.Add((amount >= 0 ? "+" : "") + Format(amount) + " " + c.name);
+            }
+            return string.Join(", ", bits.ToArray());
+        }
+
+        // Blank if the player can pay every cost in this effect, otherwise e.g. "Wood (need 25)"
+        string MissingCost(string effect)
+        {
+            if (string.IsNullOrWhiteSpace(effect)) return "";
+            foreach (string part in effect.Split(';'))
+            {
+                string key; float amount; Currency c;
+                if (!ParseEffect(part, out key, out amount)) continue;
+                if (amount < 0 && currencyAssets.TryGetValue(key, out c) && Balance(c) < -amount)
+                    return c.name + " (need " + Format(-amount) + ")";
+            }
+            return "";
+        }
+
+        string OptionLabel(string text, string effect)
+        {
+            string preview = EffectPreview(effect);
+            return preview == "" ? text : text + "\n" + preview;
+        }
+
         void ShowToast(string message) { toast = message; toastUntil = Time.time + 4; }
+
         void EnsureMusic() { if (music != null && music.clip != null && !music.isPlaying) music.Play(); }
         static string Format(float value)
         {
@@ -1181,8 +1303,10 @@ namespace COMP2165.Clicker
                 ui.eventTitle.text = current.title;
                 ui.eventDescription.text = current.description;
                 ui.eventImage.texture = Image(current.image) ?? Icon("event", "all");
-                ui.optionOneText.text = current.option1;
-                ui.optionTwoText.text = current.option2;
+                ui.optionOneText.text = OptionLabel(current.option1, current.effect1);
+                ui.optionTwoText.text = OptionLabel(current.option2, current.effect2);
+                ui.optionOne.interactable = MissingCost(current.effect1) == "";
+                ui.optionTwo.interactable = MissingCost(current.effect2) == "";
                 ui.eventQueueText.text = eventQueue.Count + " card(s) waiting. Close to return to the game.";
             }
             bool showToast = !string.IsNullOrEmpty(toast) && Time.time < toastUntil;
@@ -1237,6 +1361,19 @@ namespace COMP2165.Clicker
         public void SetHqDefense(float d) { hqDefense = d; }
         public bool GameOver { get { return gameOver; } }
 
+        // Building upgrades (e.g. Better Axe) now multiply what the workers in that building type produce
+        void ApplyUpgradeMultipliers()
+        {
+            foreach (var row in buildings)
+            {
+                var asset = buildingAssets[row.id];
+                float mult = 1f;
+                foreach (var upgrade in manager.State.EarnedUpgrades)
+                    foreach (var perk in upgrade.UpgradePerk)
+                        if (perk.TargetBuilding == asset && perk.Operation == Operation.Multiply) mult *= perk.Amount;
+                prison.SetTypeMultiplier(row.id, mult);
+            }
+        }
         public string RaidStatus()
         {
             if (gameOver) return won ? "VICTORY! The camp held." : "HQ DESTROYED";
@@ -1246,18 +1383,54 @@ namespace COMP2165.Clicker
             return "Next raid in " + eta.ToString("0") + "s (strength " + next.ToString("0.0") + ")"
                 + "\nDefense " + hqDefense.ToString("0.00")
                 + "   HQ " + hqHealth.ToString("0") + "/" + Setting("hq_max_health", 100).ToString("0")
-                + "   Raids " + raidsDone + "/" + (int)Setting("raids_to_win", 5);
+                + "   Raids " + raidsDone + "/" + (int)Setting("raids_to_win", 5)
+                + "\n" + WaveText();
+        }
+
+        readonly List<EnemyType> nextWave = new List<EnemyType>();
+
+        int RaidSize()
+        {
+            float strength = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
+            return Mathf.Max(1, Mathf.RoundToInt(strength * 3));
+        }
+
+        // Decide now which enemies the next raid will contain
+        void PlanWave()
+        {
+            nextWave.Clear();
+            var pool = enemyTypes.FindAll(e => e.firstRaid <= raidsDone);
+            if (pool.Count == 0) pool = enemyTypes;
+            int size = RaidSize();
+            for (int i = 0; i < size; i++) nextWave.Add(pool[UnityEngine.Random.Range(0, pool.Count)]);
+        }
+
+        // One line per enemy type, e.g. "Scout x3 - weakness: Watchtower"
+        public string WaveText(bool oneLine = false)
+        {
+            if (nextWave.Count == 0) return "";
+            var order = new List<EnemyType>();
+            var counts = new Dictionary<string, int>();
+            foreach (var e in nextWave)
+            {
+                if (!counts.ContainsKey(e.id)) { counts[e.id] = 0; order.Add(e); }
+                counts[e.id]++;
+            }
+            var parts = new List<string>();
+            foreach (var e in order)
+                parts.Add(e.name + " x" + counts[e.id] + " - weakness: " + (e.weakTo == "" ? "none" : BuildingName(e.weakTo)));
+            return "Incoming raiders: " + (oneLine ? string.Join("; ", parts.ToArray()) : "\n" + string.Join("\n", parts.ToArray()));
         }
 
         void StartRaid()
         {
-            float strength = Setting("raid_base_strength", 0.6f) + raidsDone * Setting("raid_growth", 0.3f);
-            raidersLeft = Mathf.Max(1, Mathf.RoundToInt(strength * 3));
+            if (nextWave.Count == 0) PlanWave();
+            raidersLeft = nextWave.Count;
             raidersTotal = raidersLeft;
             raidersThrough = 0;
             raidActive = true;
-            ShowToast("Raiders incoming!");
-            if (mapView != null) mapView.SpawnRaiders(raidersLeft);
+            ShowToast(WaveText(true));
+            if (mapView != null) mapView.SpawnRaiders(new List<EnemyType>(nextWave));
             else { raidersLeft = 1; raidersTotal = 1; RaiderArrived(); }
         }
         // MapView calls this when an enemy reaches the HQ
@@ -1279,6 +1452,7 @@ namespace COMP2165.Clicker
             if (raidersLeft > 0) return;
             raidActive = false;
             Raid();
+            PlanWave();
             nextRaid = Time.time + Setting("raid_interval_seconds", 60);
         }
 
@@ -1344,6 +1518,7 @@ namespace COMP2165.Clicker
             float made = w.SuppliesPerSecond();
             if (prison != null && prison.starving && w.yieldCurrency != prison.foodId) made *= prison.starvePenalty;
             if (prison != null) made *= prison.Efficiency(w.typeId);
+            if (prison != null) made *= prison.TypeMultiplier(w.typeId);
             made *= MultiplierFor(w.yieldCurrency);
 
             var sb = new StringBuilder();

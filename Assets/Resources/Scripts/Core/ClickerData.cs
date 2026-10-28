@@ -73,7 +73,9 @@ namespace COMP2165.Clicker
     [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId, trigger, effect1, effect2; public int correctOption; }
     [Serializable] public class BuildingSave { public string id; public int count; }
     [Serializable] public class CurrencySave { public string id; public float amount, lifetime; }
-    [Serializable]
+    [Serializable] public class EnemyType { public string id, name, image, tint, weakTo; public float health, speed, damage, weakMultiplier; public int firstRaid; }
+
+    
     public class ClickerSave
     {
         public float money, lifetime;

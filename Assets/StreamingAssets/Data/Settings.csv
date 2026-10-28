@@ -5,7 +5,7 @@ game_description,Establish a stronghold against an unforgiving enemy.
 click_label,SUPPLIES
 building_cost_growth_percent,15
 sell_refund_percent,50
-shop_reveal_percent,50
+shop_reveal_percent,0
 gold_multiplier,7
 bonus_duration_seconds,20
 gold_interval_seconds,50
@@ -21,3 +21,9 @@ tension_threshold,5
 prisoner_default_speed,50
 work_cycle_seconds,60
 commute_min_efficiency_percent,40
+building_max_health,20
+monster_damage,2
+repair_cost_percent,100
+guard_buildings,watchtower|spelltower|checkpoint
+tower_damage,2
+stat_damage_bonus,0.1

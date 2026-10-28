@@ -1,12 +1,12 @@
 id,name,description,cost,target_type,target_id,operation,amount,unlock_at,image,tooltip,cost_currency,unlock_currency
 strong_click,Better Pen,Double each manual click.,100,click,,multiply,2,0,pen,Double each manual click.,supplies,supplies
-better_hoes,Better Hoes,Increase farm output.,100,building,farm,multiply,2,0,hoe,Increase farm output.,supplies,supplies
-better_axe,Better Axe,Increase lumber mill output.,100,building,lumber_mill,multiply,2,0,axe,Increase lumber mill output.,supplies,supplies
-better_pickaxe,Better Pickaxe,Increase mine output.,100,building,mine,multiply,2,0,pickaxe,Increase mine output.,supplies,supplies
-better_trade,Trade Routes,Increase trade power.,150,building,trading_post,multiply,2,100,,Doubles Trading Post output,supplies,supplies
-better_tools,Better Tools,Increases supply output for all buildings.,500,all,,multiply,10,250,upgrade_click,Increases supply output for all buildings.,supplies,supplies
-strong_click2,Assistant,Triple each manual click.,25|25|100|250,click,,multiply,4,50,assistant,,wood|ore|food|supplies,ore
-better_hoes2,Sickles,Improve harvest.,25|20|200,building,farm,multiply,4,500,sickle,,wood|bars|supplies,food
-better_axe2,Iron Axes,Increase lumber mill output.,30|15|250,building,lumber_mill,multiply,4,500,ironaxe,,wood|bars|supplies,wood
-better_pickaxe2,Iron Pickaxes,Increase mine output.,30|20|250,building,mine,multiply,4,500,minecart,,wood|bars|supplies,ore
-better_trade2,Trade Guild,Increase trade power.,50|50|300,building,trading_post,multiply,5,250,,,planks|bars|supplies,bars
+better_hoes,Better Hoes,Increase farm output.,100,building,farm,multiply,2,0,hoe,Doubles food output.,supplies,supplies
+better_axe,Better Axe,Increase lumber mill output.,100,building,lumber_mill,multiply,2,0,axe,Doubles wood output.,supplies,supplies
+better_pickaxe,Better Pickaxe,Increase mine output.,100,building,mine,multiply,2,0,pickaxe,Doubles ore output.,supplies,supplies
+better_trade,Trade Routes,Increase trade power.,150,building,trading_post,multiply,2,100,traderoute,Doubles supply output.,supplies,supplies
+better_tools,Better Tools,Increases supply output for all buildings.,500,all,,multiply,10,250,tools,Increases resource output for all buildings.,supplies,supplies
+strong_click2,Assistant,Triple each manual click.,25|25|100|250,click,,multiply,4,50,assistant,Manual clicks x4.,wood|ore|food|supplies,ore
+better_hoes2,Sickles,Improve harvest.,25|20|200,building,farm,multiply,4,500,sickle,Farm output x4.,wood|bars|supplies,food
+better_axe2,Iron Axes,Increase lumber mill output.,30|15|250,building,lumber_mill,multiply,4,500,ironaxe,Lumber mill output x4.,wood|bars|supplies,wood
+better_pickaxe2,Iron Pickaxes,Increase mine output.,30|20|250,building,mine,multiply,4,500,minecart,Mine output x4.,wood|bars|supplies,ore
+better_trade2,Trade Guild,Increase trade power.,50|50|300,building,trading_post,multiply,5,250,tradeguild,Trading post output x5.,planks|bars|supplies,bars

@@ -63,7 +63,7 @@ namespace COMP2165.Clicker
         // Placeholder balance numbers. Tune these when you playtest.
         const float SameFactionBonus = 1.25f;
         const float MixedFactionPenalty = 0.9f;
-        const float StatToSupplies = 0.1f;
+        const float StatToSupplies = 0.2f;
         const float TensionPerWorkerPerSecond = 0.01f;
         const float GuardPerWorker = 0.15f;
         const float GuardPerStrength = 0.03f;
@@ -173,10 +173,11 @@ namespace COMP2165.Clicker
         {
             if (!isGuard) return 0;
             float total = 0;
+            const float GuardPerStat = 0.03f;   // was GuardPerStrength
             for (int i = 0; i < workers.Count; i++)
             {
                 if (workers[i].travelLeft > 0) continue;   // still walking there
-                total += GuardPerWorker + workers[i].strength * GuardPerStrength;
+                total += GuardPerWorker + workers[i].GetStat(mainStat) * GuardPerStat;
             }
             return total;
         }
