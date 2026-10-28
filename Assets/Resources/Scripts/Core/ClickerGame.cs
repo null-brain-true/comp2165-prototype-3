@@ -1143,7 +1143,8 @@ namespace COMP2165.Clicker
                 if (!ready || !goldVisible) return;
                 EnsureMusic();
                 goldVisible = false; goldEnd = Time.time + bonusDuration;
-                ShowToast("Golden bonus: " + Format(goldBonus) + "x!"); PlaySound("gold");
+                nextGold = Time.time + goldInterval;   // next one counts from the click
+                ShowToast("Smuggler's crate! Everything x" + Format(goldBonus) + " for " + Format(bonusDuration) + "s"); PlaySound("gold");
             });
             ui.stackButton.onClick.AddListener(() => { if (ready && eventQueue.Count > 0) eventOpen = true; });
             ui.closeEvent.onClick.AddListener(() => eventOpen = false);

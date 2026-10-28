@@ -8330,8 +8330,12 @@ PrefabInstance:
       value: Buildings Heading
       objectReference: {fileID: 0}
     - target: {fileID: 1788901182047557497, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 153
+      objectReference: {fileID: 0}
+    - target: {fileID: 1788901182047557497, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -645
+      value: -16
       objectReference: {fileID: 0}
     - target: {fileID: 2094496791300949812, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
       propertyPath: m_SizeDelta.x
@@ -8844,6 +8848,10 @@ PrefabInstance:
     - target: {fileID: 7845131130619816542, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: -3
+      objectReference: {fileID: 0}
+    - target: {fileID: 8093300695473228911, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8275575011836191206, guid: f64e62fa700313340ae7468c6a12a627, type: 3}
       propertyPath: m_IsActive

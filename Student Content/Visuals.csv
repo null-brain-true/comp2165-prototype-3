@@ -48,7 +48,7 @@ sprite_sheet,sheets/cookie_clicker_icons.png,,,48,,,,,,
 tradeguild,icons/gameicons/tradeguild.png,,,,,,,,,
 tools,icons/gameicons/tools.png,,,,,,,,,
 clickable,icons/gameicons/work.png,,,,,,,,6,3
-golden_cookie,,11,3,,,,,,,
+golden_cookie,icons/gameicons/crate.png,,,,,,,,,
 cursor,,0,0,,,,,,,
 grandma,,10,9,,,,,,,
 farm1,,21,1,,,,,,,
