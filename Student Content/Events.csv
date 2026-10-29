@@ -1,5 +1,5 @@
 Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency,Trigger,Option 1 Effect,Option 2 Effect
-Camp Brawl,A fight has broken out between the prisoners. What do you do?,Exile the Rindleader,Throw a feast ,0,brawl,event,supplies,tension,prisoners=-1;tension=-3,boost=50@30@food;boost=-30@30@supplies
+Camp Brawl,A fight has broken out between the prisoners. What do you do?,Send them on trade runs,Throw a feast ,0,brawl,event,supplies,tension,boost=50@30@supplies;boost=-30@30@food ,boost=50@30@food;boost=-30@30@supplies
 Harvest Festivel,Prisoners made farming look fun.,Let them celebrate,Work it through,0,festivel,event,supplies,tension,boost=50@30@food;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@food
 Fire,Lightning struck the camp and something is burning.,Salvage timber,Save the workshop,0,fire,event,supplies,tension,boost=50@30@wood;boost=-30@30@planks,boost=50@30@planks;boost=-30@30@wood
 Competition,Prisoners are pumped up and wants to show whos boss.,Mining Contest,Logging Contest,0,competition,event,supplies,tension,boost=50@30@ore;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@ore
