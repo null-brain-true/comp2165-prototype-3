@@ -27,3 +27,6 @@ repair_cost_percent,100
 guard_buildings,watchtower|spelltower|checkpoint
 tower_damage,2
 stat_damage_bonus,0.1
+repair_supplies,25
+raid_growth,0.4
+food_per_prisoner,0.35

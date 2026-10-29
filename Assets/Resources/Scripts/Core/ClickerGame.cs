@@ -400,20 +400,67 @@ namespace COMP2165.Clicker
             return row == null ? "" : buildingAssets[row.id].Cost.Currency.name;
         }
 
-        public bool TrySpendRepair(string id, float amount)
+        // Everything a repair costs: the building's own material, plus supplies for the labour.
+        // Both scale with how damaged it is (missingFraction 0 = full health, 1 = nearly destroyed).
+        List<RecipeLine> RepairCosts(string id, float missingFraction)
         {
+            var costs = new List<RecipeLine>();
             var row = FindBuilding(id);
-            if (row == null) return false;
-            var costCurrency = buildingAssets[row.id].Cost.Currency;
-            if (Balance(costCurrency) < amount)
+            if (row == null || missingFraction <= 0) return costs;
+
+            float material = Mathf.Max(1f, Mathf.Ceil(row.cost * missingFraction * Setting("repair_cost_percent", 50) / 100f));
+            costs.Add(new RecipeLine { currencyId = row.costCurrency, amount = material });
+
+            float supplies = Mathf.Ceil(Setting("repair_supplies", 20) * missingFraction);
+            if (supplies > 0)
             {
-                ShowToast("Not enough " + costCurrency.name + " to repair.");
-                return false;
+                string suppliesId = currencyDefinitions[0].id;
+                var same = costs.Find(c => c.currencyId.Equals(suppliesId, StringComparison.OrdinalIgnoreCase));
+                if (same != null) same.amount += supplies;   // building already costs supplies: add to it
+                else costs.Add(new RecipeLine { currencyId = suppliesId, amount = supplies });
             }
-            manager.State.CurrencyCurrentTotals[costCurrency] = Balance(costCurrency) - amount;
+            return costs;
+        }
+
+        // For the REPAIR button: one amount + icon per cost
+        public List<CostEntry> RepairCostEntries(string id, float missingFraction)
+        {
+            var entries = new List<CostEntry>();
+            foreach (var line in RepairCosts(id, missingFraction)) entries.Add(MakeCost(line.amount, line.currencyId));
+            return entries;
+        }
+
+        public bool CanAffordRepair(string id, float missingFraction)
+        {
+            foreach (var line in RepairCosts(id, missingFraction))
+                if (Balance(currencyAssets[line.currencyId]) < line.amount) return false;
+            return true;
+        }
+
+        public bool TrySpendRepair(string id, float missingFraction)
+        {
+            var costs = RepairCosts(id, missingFraction);
+            if (costs.Count == 0) return false;
+            foreach (var line in costs)
+            {
+                var asset = currencyAssets[line.currencyId];
+                if (Balance(asset) < line.amount)
+                {
+                    ShowToast("Not enough " + asset.name + " to repair (need " + Format(line.amount) + ").");
+                    return false;
+                }
+            }
+            foreach (var line in costs)
+            {
+                var asset = currencyAssets[line.currencyId];
+                manager.State.CurrencyCurrentTotals[asset] = Balance(asset) - line.amount;
+            }
             PlaySound("buy");
             return true;
         }
+
+        // How damaged a building is: 0 = full health, 1 = nearly destroyed, -1 = not found
+        public float MissingHp(Workplace w) { return mapView == null ? -1f : mapView.MissingFraction(w); }
 
         // Passthroughs so PrisonPanelView can reach MapView
         public string BuildingHpText(Workplace w) { return mapView == null ? "" : mapView.HpText(w); }
@@ -524,6 +571,17 @@ namespace COMP2165.Clicker
             return Mathf.Ceil(line.amount * Mathf.Pow(1 + manager.Config.BuildingCostIncrease, owned));
         }
 
+        // Name of the first upgrade extra cost the player can't afford. Blank means they can afford all of them.
+        string MissingUpgradeExtra(UpgradeData row)
+        {
+            foreach (var line in row.extraCosts)
+            {
+                var asset = currencyAssets[line.currencyId];
+                if (Balance(asset) < line.amount) return asset.name;
+            }
+            return "";
+        }
+
         // Name of the first extra cost the player can't afford. Blank means they can afford all of them.
         string MissingExtra(BuildingData row, int owned)
         {
@@ -598,7 +656,7 @@ namespace COMP2165.Clicker
         {
             Currency food;
             if (!currencyAssets.TryGetValue("food", out food)) { prison.starving = false; return; }
-            float need = prison.PrisonerCount() * Setting("food_per_prisoner", 0.1f);
+            float need = prison.PrisonerCount() * Setting("food_per_prisoner", 0.35f);
             float have = Balance(food);
             prison.starving = need > 0 && have < need;
             manager.State.CurrencyCurrentTotals[food] = Mathf.Max(0, have - need);
@@ -1194,10 +1252,23 @@ namespace COMP2165.Clicker
                 row.tooltip = shopTooltip;
                 row.tooltipText = string.IsNullOrWhiteSpace(data.tooltip) ? string.Empty : data.name + "\n" + data.tooltip;
                 row.action.onClick.AddListener(() =>
+            {
+                if (!ready) return;
+                var asset = upgradeAssets[data.id];
+                if (manager.State.EarnedUpgrades.Contains(asset)) return;
+                if (Balance(asset.Cost.Currency) < data.cost) return;
+                string missing = MissingUpgradeExtra(data);
+                if (missing != "") { ShowToast("Not enough " + missing + " for " + data.name + "."); return; }
+
+                manager.BuyUpgrade(asset);                                     // pays the first cost
+                if (!manager.State.EarnedUpgrades.Contains(asset)) return;     // purchase failed: don't charge the rest
+                foreach (var line in data.extraCosts)                          // pay the other costs
                 {
-                    if (!ready) return;
-                    manager.BuyUpgrade(upgradeAssets[data.id]); PlaySound("buy"); SaveProgress();
-                });
+                    var c = currencyAssets[line.currencyId];
+                    manager.State.CurrencyCurrentTotals[c] = Balance(c) - line.amount;
+                }
+                PlaySound("buy"); SaveProgress();
+            });
                 upgradeRows.Add(data.id, row);
             }
             ui.loadingPanel.SetActive(false);
@@ -1289,10 +1360,16 @@ namespace COMP2165.Clicker
                 row.icon.texture = Image(data.image) ?? Icon(data.id, data.targetType);
                 row.title.text = data.name;
                 row.tooltipText = string.IsNullOrWhiteSpace(data.tooltip) ? string.Empty : data.name + "\n" + data.tooltip + (unlocked ? "" : "\nUnlock at " + Format(data.unlockAt) + " lifetime " + unlockCurrency.name);
-                row.action.interactable = !purchased && unlocked && Balance(costCurrency) >= data.cost;
+                row.action.interactable = !purchased && unlocked && Balance(costCurrency) >= data.cost && MissingUpgradeExtra(data) == "";
                 if (purchased) row.SetActionText("OWNED");
                 else if (!unlocked) row.SetActionText("LOCKED");
-                else row.SetCosts("BUY", new List<CostEntry> { MakeCost(data.cost, data.costCurrency) });
+                else
+                {
+                    var costs = new List<CostEntry> { MakeCost(data.cost, data.costCurrency) };
+                    foreach (var line in data.extraCosts) costs.Add(MakeCost(line.amount, line.currencyId));
+                    row.SetCosts("BUY", costs);
+                }
+                ;
             }
 
             bool showEvent = eventOpen && eventQueue.Count > 0;

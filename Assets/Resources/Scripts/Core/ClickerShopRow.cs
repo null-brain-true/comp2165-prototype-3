@@ -82,6 +82,7 @@ namespace COMP2165.Clicker
         class CostSlot { public GameObject root; public Text amount; public RawImage icon; }
         readonly List<CostSlot> costSlots = new List<CostSlot>();
         RectTransform costStrip;
+        GridLayoutGroup costGrid;
 
         // Plain text on the button (LOCKED, OWNED, CANCEL...). Hides the icon strip.
         public void SetActionText(string text)
@@ -92,12 +93,18 @@ namespace COMP2165.Clicker
         }
 
         // "BUY" on top, then one [amount][icon] pair per cost underneath.
+        // 1-2 costs fit on one line. 3-4 costs go on two smaller lines.
         public void SetCosts(string header, List<CostEntry> costs)
         {
             EnsureStrip();
-            SetRect(actionText.rectTransform, 4f, 2f, 94f, 24f);
+            bool twoRows = costs.Count > 2;
+            SetRect(actionText.rectTransform, 4f, twoRows ? 1f : 2f, 94f, twoRows ? 18f : 24f);
             actionText.text = header;
             costStrip.gameObject.SetActive(true);
+            costStrip.sizeDelta = new Vector2(-6f, twoRows ? 38f : 28f);
+            costGrid.cellSize = new Vector2(costs.Count == 1 ? 90f : 46f, twoRows ? 18f : 26f);
+            costGrid.constraintCount = costs.Count == 1 ? 1 : 2;
+
             while (costSlots.Count < costs.Count) costSlots.Add(NewSlot());
             for (int i = 0; i < costSlots.Count; i++)
             {
@@ -108,13 +115,16 @@ namespace COMP2165.Clicker
                 costSlots[i].icon.gameObject.SetActive(hasIcon);
                 costSlots[i].icon.texture = costs[i].icon;
                 costSlots[i].amount.text = hasIcon ? costs[i].amount : costs[i].amount + " " + costs[i].name;
+                costSlots[i].amount.fontSize = twoRows ? 12 : 14;
+                var le = costSlots[i].icon.GetComponent<LayoutElement>();
+                le.preferredWidth = le.preferredHeight = twoRows ? 15f : 20f;
             }
         }
 
         void EnsureStrip()
         {
             if (costStrip != null) return;
-            var go = new GameObject("Cost Strip", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            var go = new GameObject("Cost Strip", typeof(RectTransform), typeof(GridLayoutGroup));
             go.layer = LayerMask.NameToLayer("UI");
             costStrip = go.GetComponent<RectTransform>();
             costStrip.SetParent(action.transform, false);
@@ -123,11 +133,11 @@ namespace COMP2165.Clicker
             costStrip.pivot = new Vector2(0.5f, 0f);
             costStrip.anchoredPosition = new Vector2(0f, 3f);
             costStrip.sizeDelta = new Vector2(-6f, 28f);
-            var layout = go.GetComponent<HorizontalLayoutGroup>();
-            layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.spacing = 6f;
-            layout.childControlWidth = layout.childControlHeight = true;
-            layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+            costGrid = go.GetComponent<GridLayoutGroup>();
+            costGrid.childAlignment = TextAnchor.MiddleCenter;
+            costGrid.spacing = new Vector2(4f, 0f);
+            costGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            costGrid.constraintCount = 2;
         }
 
         CostSlot NewSlot()

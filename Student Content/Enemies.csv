@@ -1,4 +1,4 @@
 id,name,image,tint,health,speed,damage,weak_to,weak_multiplier,first_raid
-scout,Scout,monster,#E8D44D,10,90,1.5,watchtower,2,0
-wraith,Wraith,monster,#9B6BFF,15,60,2,spelltower,2,1
-brute,Brute,monster,#C0392B,30,40,3,checkpoint,2,2
+scout,Scout,scout,#E8D44D,20,90,1.5,watchtower,2,0
+wraith,Wraith,wraith,#9B6BFF,15,60,2,spelltower,2,1
+brute,Brute,brute,#C0392B,30,40,3,checkpoint,2,2

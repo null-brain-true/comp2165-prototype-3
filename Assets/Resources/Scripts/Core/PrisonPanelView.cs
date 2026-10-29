@@ -208,8 +208,17 @@ namespace COMP2165.Clicker
                     + (p.isGuard ? "\nGuard power " + p.GuardPower().ToString("0.00") : "")
                     + (!p.isGuard && !p.IsStaffed() ? "\nIDLE: no workers" : "")
                     + (!p.isGuard && prison.Efficiency(p.typeId) < 1f ? "\nSHORT ON INPUTS" : "");
-                row.action.interactable = game.CanRepair(p);
-                row.actionText.text = game.RepairButtonText(p);
+                float missing = game.MissingHp(p);
+                if (missing <= 0.001f)
+                {
+                    row.SetActionText(missing < 0 ? "REPAIR" : "FULL HP");
+                    row.action.interactable = false;
+                }
+                else
+                {
+                    row.SetCosts("REPAIR", game.RepairCostEntries(p.typeId, missing));
+                    row.action.interactable = game.CanAffordRepair(p.typeId, missing);
+                }
             }
 
             float cost = prison.PrisonerCost();

@@ -105,7 +105,7 @@ namespace COMP2165.Clicker
                 {
                     if (s.occupant == "") continue;
                     int i; counts.TryGetValue(s.occupant, out i);
-                    g.ApplyDistance(s.occupant, i, Vector2.Distance(s.rect.anchoredPosition, hq.anchoredPosition));
+                    g.ApplyDistance(s.occupant, i, Vector2.Distance(CenterInMap(s.rect), CenterInMap(hq)));
                     counts[s.occupant] = i + 1;
                 }
             }
@@ -513,6 +513,14 @@ namespace COMP2165.Clicker
             return "REPAIR\n" + Mathf.CeilToInt(game.RepairCostFor(s.occupant, missing)) + " " + game.RepairCurrencyName(s.occupant);
         }
 
+        // 0 = full health, 1 = nearly destroyed, -1 = no slot found
+        public float MissingFraction(Workplace w)
+        {
+            Slot s = SlotFor(w);
+            if (s == null || s.occupant == "") return -1f;
+            return Mathf.Clamp01(1f - s.hp / MaxHp());
+        }
+
         // The REPAIR button in the building window calls this (through ClickerGame)
         public void Repair()
         {
@@ -521,7 +529,7 @@ namespace COMP2165.Clicker
             float max = MaxHp();
             float missing = 1f - s.hp / max;
             if (missing <= 0.001f) { game.Notify("Already at full health."); return; }
-            if (!game.TrySpendRepair(s.occupant, game.RepairCostFor(s.occupant, missing))) return;
+            if (!game.TrySpendRepair(s.occupant, missing)) return;
             s.hp = max;
             Save();
             game.Notify(game.BuildingName(s.occupant) + " repaired.");
