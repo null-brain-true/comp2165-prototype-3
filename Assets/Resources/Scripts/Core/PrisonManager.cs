@@ -171,6 +171,13 @@ namespace COMP2165.Clicker
             return UnityEngine.Mathf.Ceil(prisonerBaseCost * UnityEngine.Mathf.Pow(1 + costGrowth, prisonersOrdered));
         }
 
+        // Free prisoners from an event. Doesn't raise the order price.
+        public int AddPrisoners(int count)
+        {
+            for (int i = 0; i < count; i++) unassigned.Add(CreateRandomPrisoner());
+            if (count > 0) version++;
+            return count;
+        }
         // Adds a new random prisoner to the waiting list. (The caller takes the supplies first.)
         public void OrderPrisoner()
         {

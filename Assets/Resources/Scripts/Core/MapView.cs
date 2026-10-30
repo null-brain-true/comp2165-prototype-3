@@ -698,15 +698,35 @@ namespace COMP2165.Clicker
             Workplace place = WorkplaceFor(s);
             if (place == null) return;   // just placed, the workplace isn't created yet
             openSlot = s;
+            game.SelectedWorkplace = place;
 
             Prisoner waiting = game.SelectedPrisoner;
-            if (waiting != null)
+            if (waiting == null)
             {
-                if (game.Prison.Assign(waiting, place)) game.SelectedPrisoner = null;
-                else game.Notify(place.name + " is full.");
+                // Nothing selected: show the building's details
+                if (tabs != null) tabs.Show(buildingInfoPage);
+                return;
             }
-            game.SelectedWorkplace = place;
-            if (tabs != null) tabs.Show(buildingInfoPage);
+
+            if (!game.Prison.Assign(waiting, place))
+            {
+                // Building full: keep the selection and stay on the prisoner list
+                game.Notify(place.name + " is full.");
+                return;
+            }
+
+            game.SelectedPrisoner = null;
+            if (game.Prison.unassigned.Count > 0)
+            {
+                // More prisoners waiting: stay on the list so the next one can be picked
+                game.Notify(waiting.Label() + " assigned to " + place.name + ".");
+            }
+            else
+            {
+                // Nobody left to assign: show the building
+                game.Notify(waiting.Label() + " assigned to " + place.name + ". Everyone has a job.");
+                if (tabs != null) tabs.Show(buildingInfoPage);
+            }
         }
 
         // Called by the SELL button in the building window (this is the old sell code from Clicked)

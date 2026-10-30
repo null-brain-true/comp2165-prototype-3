@@ -37,5 +37,5 @@ raid_first_seconds,120
 raid_interval_seconds,60
 raid_base_strength,0.6
 raid_damage,34
-raid_loss_percent,30
+raid_loss_percent,0
 guard_radius,200

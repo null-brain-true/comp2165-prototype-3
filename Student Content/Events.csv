@@ -1,9 +1,12 @@
-Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency,Trigger,Option 1 Effect,Option 2 Effect
-Camp Brawl,A fight has broken out between the prisoners. What do you do?,Send them on trade runs,Throw a feast ,0,brawl,event,supplies,tension,boost=50@30@supplies;boost=-30@30@food ,boost=50@30@food;boost=-30@30@supplies
-Harvest Festivel,Prisoners made farming look fun.,Let them celebrate,Work it through,0,festivel,event,supplies,tension,boost=50@30@food;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@food
-Fire,Lightning struck the camp and something is burning.,Salvage timber,Save the workshop,0,fire,event,supplies,tension,boost=50@30@wood;boost=-30@30@planks,boost=50@30@planks;boost=-30@30@wood
-Competition,Prisoners are pumped up and wants to show whos boss.,Mining Contest,Logging Contest,0,competition,event,supplies,tension,boost=50@30@ore;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@ore
-Locusts,A swarm decends on the farms.,Burn the swarms,Wait it out,0,locust,event,supplies,raid,wood=-75,boost=-40@30@food
-Earthquake,The ground shakes and two building learn gravity exist.,Brace the buildings,Ride it out,0,earthquake,event,supplies,raid,bars=-50,destroy=any
-Raiders,Monsters have broken into the camp. What do you do?,Bribe them,Fight them off,0,raid,event,supplies,raid,supplies=-25,prisoners=-5
-Disease,A disease has broken out in the camp.,Quarrantine the infected,Push through it,0,disease,event,supplies,raid,food=-200,boost=-25@30
+Event Title,Event Description,Event Option 1,Event Option 2,Correct Option,Image,Sound,Currency,Trigger,Option 1 Effect,Option 2 Effect,mandatory
+Camp Brawl,A fight has broken out between the prisoners. What do you do?,Send them on trade runs,Throw a feast ,0,brawl,event,supplies,tension,boost=50@30@supplies;boost=-30@30@food ,boost=50@30@food;boost=-30@30@supplies,0
+Harvest Festival,Prisoners made farming look fun.,Let them celebrate,Work it through,0,festivel,event,supplies,tension,boost=50@30@food;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@food,0
+Fire,Lightning struck the camp and something is burning.,Salvage timber,Save the workshop,0,fire,event,supplies,tension,boost=50@30@wood;boost=-30@30@planks,boost=50@30@planks;boost=-30@30@wood,0
+Competition,Prisoners are pumped up and want to show who's boss.,Mining Contest,Logging Contest,0,competition,event,supplies,tension,boost=50@30@ore;boost=-30@30@wood,boost=50@30@wood;boost=-30@30@ore,0
+Hostages Taken,The raiders captured some prisoners. They want a ransom.,Pay the ransom,Refuse to pay,0,raid,event,supplies,raid_loss,all=-15,prisoners=-2,1
+Outbreak,Prisoners wounded in the attack fall sick.,Buy medicine,Isolate the sick,0,disease,event,supplies,raid_loss,all=-10,prisoners=-3,1
+Walls collapsed,Raid left the camp in ruins and prisoners are trapped under the rubble.,Dig them out,Leave them,0,earthquake,event,supplies,raid_loss,all=-15,prisoners=-2,1
+Burning storage,Raiders set the warehouse on fire. Prisoners can attempt to save it.,Let it burn,Send in the prisoners,0,fire,event,supplies,raid_loss,all=-12,prisoners=-1,1
+Fired Up,Fending off the raid made prisoners eager to work.,Logging Push,Mining Push,0,competition,event,supplies,raid_win,boost=60@60@wood,boost=60@60@ore,1
+Captured raiders,You captured some raiders.,Sell them,Enslave them,0,festivel,event,supplies,raid_win,supplies=100,prisoners=2,1
+Spoils of War,Raiders left behind their equipment.,Melt the weapons,Disassemble the carts,0,competition,event,supplies,raid_win,bars=30,planks=30,1

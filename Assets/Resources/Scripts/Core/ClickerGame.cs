@@ -209,6 +209,8 @@ namespace COMP2165.Clicker
                 if (!int.TryParse(Csv.Get(row, "Correct Option"), NumberStyles.Integer, CultureInfo.InvariantCulture, out correctOption) || correctOption < 0 || correctOption > 2)
                 { error = "Every event needs Correct Option 0 (random), 1, or 2."; yield break; }
                 var item = new EventData { title = Csv.Get(row, "Event Title"), description = Csv.Get(row, "Event Description"), option1 = Csv.Get(row, "Event Option 1"), option2 = Csv.Get(row, "Event Option 2"), image = Csv.Get(row, "Image"), sound = Csv.Get(row, "Sound"), currencyId = Csv.Get(row, "Currency", primaryId), correctOption = correctOption, trigger = Csv.Get(row, "Trigger"), effect1 = Csv.Get(row, "Option 1 Effect"), effect2 = Csv.Get(row, "Option 2 Effect") };
+                string must = Csv.Get(row, "Mandatory").ToLowerInvariant();
+                item.mandatory = must == "1" || must == "yes" || must == "true";
                 events.Add(item);
             }
             foreach (var row in loaded["Visuals"])
@@ -810,8 +812,8 @@ namespace COMP2165.Clicker
                 if (!ParseEffect(part, out key, out amount)) continue;
                 if (key.Equals("prisoners", StringComparison.OrdinalIgnoreCase))
                 {
-                    int n = amount < 0 ? prison.RemoveRandomPrisoners((int)-amount) : 0;
-                    summary.Add(n + " prisoner(s) exiled");
+                    if (amount > 0) summary.Add(prison.AddPrisoners((int)amount) + " new prisoner(s) joined the camp");
+                    else summary.Add(prison.RemoveRandomPrisoners((int)-amount) + " prisoner(s) lost");
                 }
                 else if (key.Equals("tension", StringComparison.OrdinalIgnoreCase))
                 {
@@ -883,7 +885,7 @@ namespace COMP2165.Clicker
                     continue;
                 }
                 if (!ParseEffect(part, out key, out amount)) continue;
-                if (key.Equals("prisoners", StringComparison.OrdinalIgnoreCase)) bits.Add(Format(amount) + " prisoner" + (Mathf.Abs(amount) == 1 ? "" : "s"));
+                if (key.Equals("prisoners", StringComparison.OrdinalIgnoreCase)) bits.Add((amount > 0 ? "+" : "") + Format(amount) + " prisoner" + (Mathf.Abs(amount) == 1 ? "" : "s"));
                 else if (key.Equals("tension", StringComparison.OrdinalIgnoreCase)) bits.Add(amount < 0 ? "Tension down" : "Tension up");
                 else if (key.Equals("all", StringComparison.OrdinalIgnoreCase)) bits.Add("-" + Format(Mathf.Abs(amount)) + "% all stock");
                 else if (currencyAssets.TryGetValue(key, out c)) bits.Add((amount >= 0 ? "+" : "") + Format(amount) + " " + c.name);
@@ -1205,7 +1207,7 @@ namespace COMP2165.Clicker
                 ShowToast("Smuggler's crate! Everything x" + Format(goldBonus) + " for " + Format(bonusDuration) + "s"); PlaySound("gold");
             });
             ui.stackButton.onClick.AddListener(() => { if (ready && eventQueue.Count > 0) eventOpen = true; });
-            ui.closeEvent.onClick.AddListener(() => eventOpen = false);
+            ui.closeEvent.onClick.AddListener(() => { if (!TopIsMandatory()) eventOpen = false; });
             ui.optionOne.onClick.AddListener(() => { if (ready) ResolveEvent(1); });
             ui.optionTwo.onClick.AddListener(() => { if (ready) ResolveEvent(2); });
             ui.buyMode.onClick.AddListener(() => sellingBuildings = false);
@@ -1372,6 +1374,7 @@ namespace COMP2165.Clicker
                 ;
             }
 
+            if (TopIsMandatory()) eventOpen = true;   // can't be dismissed
             bool showEvent = eventOpen && eventQueue.Count > 0;
             if (showEvent && shopTooltip != null) shopTooltip.Hide();
             ui.eventOverlay.SetActive(showEvent);
@@ -1385,7 +1388,10 @@ namespace COMP2165.Clicker
                 ui.optionTwoText.text = OptionLabel(current.option2, current.effect2);
                 ui.optionOne.interactable = MissingCost(current.effect1) == "";
                 ui.optionTwo.interactable = MissingCost(current.effect2) == "";
-                ui.eventQueueText.text = eventQueue.Count + " card(s) waiting. Close to return to the game.";
+                ui.closeEvent.gameObject.SetActive(!current.mandatory);
+                ui.eventQueueText.text = current.mandatory
+                    ? "You must choose before returning to the camp."
+                    : eventQueue.Count + " card(s) waiting. Close to return to the game.";
             }
             bool showToast = !string.IsNullOrEmpty(toast) && Time.time < toastUntil;
             ui.toastPanel.SetActive(showToast);
@@ -1433,8 +1439,23 @@ namespace COMP2165.Clicker
             if (pool.Count == 0) pool = events;   // no matching card: use any, so something still appears
             if (pool.Count == 0) return;
             var next = pool[UnityEngine.Random.Range(0, pool.Count)];
-            eventQueue.Add(QueueEvent(next));
+            var card = QueueEvent(next);
+            AddToQueue(card);
+            if (card.mandatory) eventOpen = true;   // must be answered now
             PlaySound(string.IsNullOrEmpty(next.sound) ? "event" : next.sound);
+        }
+
+        // Mandatory cards stay on top of the stack until they're answered
+        void AddToQueue(EventData card)
+        {
+            int at = eventQueue.Count;
+            while (!card.mandatory && at > 0 && eventQueue[at - 1].mandatory) at--;
+            eventQueue.Insert(at, card);
+        }
+
+        bool TopIsMandatory()
+        {
+            return eventQueue.Count > 0 && eventQueue[eventQueue.Count - 1].mandatory;
         }
         public void SetHqDefense(float d) { hqDefense = d; }
         public bool GameOver { get { return gameOver; } }
@@ -1563,11 +1584,13 @@ namespace COMP2165.Clicker
                     manager.State.CurrencyCurrentTotals[asset] = Balance(asset) * (1f - loss);
                 }
                 hqHealth -= frac * Setting("raid_damage", 34);
-                ShowToast("Raid broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles.");
-                TriggerEvent("raid");
+                ShowToast(loss > 0
+                    ? "Raid broke through! Lost " + (loss * 100f).ToString("0") + "% of stockpiles."
+                    : "Raid broke through! The HQ took damage.");
             }
             if (hqHealth <= 0) { gameOver = true; won = false; }
             else if (raidsDone >= (int)Setting("raids_to_win", 5)) { gameOver = true; won = true; }
+            if (!gameOver) TriggerEvent(gap <= 0 ? "raid_win" : "raid_loss");
         }
         public ClickerTooltip Tooltip { get { return shopTooltip; } }
         public int CurrencyCount { get { return currencyDefinitions.Count; } }

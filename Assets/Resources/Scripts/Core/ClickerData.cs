@@ -70,12 +70,12 @@ namespace COMP2165.Clicker
         public List<RecipeLine> inputs = new List<RecipeLine>();       // used up per item made
     }
     [Serializable] public class UpgradeData { public string id, name, description, tooltip, targetType, targetId, operation, image, costCurrency, unlockCurrency; public float cost, amount, unlockAt; public List<RecipeLine> extraCosts = new List<RecipeLine>(); }
-    [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId, trigger, effect1, effect2; public int correctOption; }
+    [Serializable] public class EventData { public string title, description, option1, option2, image, sound, currencyId, trigger, effect1, effect2; public int correctOption; public bool mandatory; }
     [Serializable] public class BuildingSave { public string id; public int count; }
     [Serializable] public class CurrencySave { public string id; public float amount, lifetime; }
     [Serializable] public class EnemyType { public string id, name, image, tint, weakTo; public float health, speed, damage, weakMultiplier; public int firstRaid; }
 
-    
+
     public class ClickerSave
     {
         public float money, lifetime;
