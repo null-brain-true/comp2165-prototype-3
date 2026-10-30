@@ -11,6 +11,7 @@ namespace COMP2165.Clicker
         {
             if (view == null || rows == null) return;
             Color? primary = null, title = null, secondary = null, buttonText = null, notificationText = null, tooltipText = null;
+            Color? victoryText = null, defeatText = null;
             foreach (var row in rows)
             {
                 string key = Csv.Get(row, "key").Trim().ToLowerInvariant();
@@ -50,6 +51,10 @@ namespace COMP2165.Clicker
                     case "text_button": buttonText = color; break;
                     case "text_notification": notificationText = color; break;
                     case "text_tooltip": tooltipText = color; break;
+                    case "text_victory": victoryText = color; break;
+                    case "text_defeat": defeatText = color; break;
+                    case "victory_panel": SetNamed(view, "Victory Panel", color); break;
+                    case "defeat_panel": SetNamed(view, "Defeat Panel", color); break;
                     default: Debug.LogWarning("Unknown Palette.csv key: " + key); break;
                 }
             }
@@ -85,6 +90,10 @@ namespace COMP2165.Clicker
                     var caption = tooltip.GetComponentInChildren<Text>(true);
                     if (caption != null) caption.color = tooltipText.Value;
                 }
+
+            // After text_primary, so these win over it
+            if (victoryText.HasValue) SetNamedText(view, "Victory", victoryText.Value);
+            if (defeatText.HasValue) SetNamedText(view, "Defeat", defeatText.Value);
         }
 
         static void SetNamed(ClickerCanvasView view, string name, Color color)
@@ -92,6 +101,12 @@ namespace COMP2165.Clicker
             foreach (var image in view.GetComponentsInChildren<Image>(true))
                 if (image.gameObject.name == name) { image.color = color; return; }
             Debug.LogWarning("Canvas panel missing for Palette.csv: " + name);
+        }
+        static void SetNamedText(ClickerCanvasView view, string name, Color color)
+        {
+            foreach (var text in view.GetComponentsInChildren<Text>(true))
+                if (text.gameObject.name == name) { text.color = color; return; }
+            Debug.LogWarning("Text missing for Palette.csv: " + name);
         }
     }
 }

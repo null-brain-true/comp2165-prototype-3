@@ -30,3 +30,12 @@ stat_damage_bonus,0.1
 repair_supplies,25
 raid_growth,0.4
 food_per_prisoner,0.35
+defense_per_tower,0.3
+raids_to_win,5
+hq_max_health,100
+raid_first_seconds,120
+raid_interval_seconds,60
+raid_base_strength,0.6
+raid_damage,34
+raid_loss_percent,30
+guard_radius,200

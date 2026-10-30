@@ -136,10 +136,10 @@ namespace COMP2165.Clicker
             }
             activeTowers = towerPower;
             activeGuards = towerGuards;
-            float hqDefense = 0;
-            if (hq != null)
-                foreach (var t in towerPower)
-                    if (Vector2.Distance(CenterInMap(hq), CenterInMap(t.Key.rect)) <= g.GuardRadius) hqDefense += t.Value;
+            // HQ defense: a flat amount for every defense building on the map
+            int manned = 0;
+            foreach (var t in towerPower) if (t.Value > 0) manned++;   // at least one guard has arrived
+            float hqDefense = manned * g.GetSetting("defense_per_tower", 0.3f);
             g.SetHqDefense(hqDefense);
             if (hqImage != null && hqImage.texture == null) hqImage.texture = g.GetImage("hq");
             if (hq != null && walkerTemplate != null) UpdateWalkers(g);

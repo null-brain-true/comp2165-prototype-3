@@ -1438,6 +1438,14 @@ namespace COMP2165.Clicker
         }
         public void SetHqDefense(float d) { hqDefense = d; }
         public bool GameOver { get { return gameOver; } }
+        public bool Won { get { return won; } }
+
+        // Lets other scripts play a sound. Uses the fallback key if the first one isn't in Audio.csv.
+        public void PlaySfx(string key, string fallback = "")
+        {
+            if (sounds.ContainsKey(key)) PlaySound(key);
+            else if (fallback != "") PlaySound(fallback);
+        }
 
         // Building upgrades (e.g. Better Axe) now multiply what the workers in that building type produce
         void ApplyUpgradeMultipliers()

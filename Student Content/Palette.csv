@@ -17,3 +17,7 @@ text_secondary,#E2D5ABE6
 text_button,#FFF3D6
 text_notification,#F5EAD0
 text_tooltip,#F5EAD0
+text_victory,#30FF00
+text_defeat,#FF0000
+victory_panel,#FFFFFF
+defeat_panel,#FFFFFF

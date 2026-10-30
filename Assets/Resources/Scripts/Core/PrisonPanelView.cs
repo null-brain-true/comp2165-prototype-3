@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-
+ 
 namespace COMP2165.Clicker
 {
     // Fills the prison panel you build in Unity with prisoners and buildings,
@@ -16,46 +16,54 @@ namespace COMP2165.Clicker
         public RectTransform buildingContent;  // the Content object of the building window (shows the building clicked on the map)
         public ClickerShopRow waitingTemplate;     // a copy of the shop's "Building Row TEMPLATE" (switched off)
         public ClickerShopRow assignedTemplate;
-
+        public TabPages tabs;              // drag in the object with TabPages
+        public int prisonersPage = 0;      // index of PrisonerPage in TabPages
+        public int buildingInfoPage = 3;   // index of BuildingInfoPage in TabPages
+        Workplace pendingPlace;            // the building whose empty slot was clicked
+ 
         ClickerGame game;
         PrisonManager prison;
         bool setUp = false;
         bool dirty = true;          // true when the lists need rebuilding
         int shownVersion = -1;      // the prison.version the lists were last built for
         Workplace shownWorkplace;   // the building the lists were last built for
-
+ 
         List<GameObject> rows = new List<GameObject>();            // every row currently on screen
         List<Workplace> headerPlaces = new List<Workplace>();      // building rows, so their text can update
         List<ClickerShopRow> headerRows = new List<ClickerShopRow>();
-
+ 
         void Awake()
         {
             if (waitingTemplate != null) waitingTemplate.gameObject.SetActive(false);
             if (assignedTemplate != null) assignedTemplate.gameObject.SetActive(false);
             if (orderButton != null) orderButton.onClick.AddListener(OrderClicked);
         }
-
+ 
         // ClickerGame calls this every frame.
         public void Refresh(ClickerGame game, PrisonManager prison)
         {
             this.game = game;
             this.prison = prison;
-
+ 
             // If the clicked building was sold, forget it
             if (game.SelectedWorkplace != null && !prison.workplaces.Contains(game.SelectedWorkplace))
                 game.SelectedWorkplace = null;
-
+ 
+            // Forget a pending slot if that building is gone or the player opened a different one
+            if (pendingPlace != null && (!prison.workplaces.Contains(pendingPlace) || game.SelectedWorkplace != pendingPlace))
+            { pendingPlace = null; dirty = true; }
+ 
             // While the panel is hidden there is nothing to draw. It catches up as soon as it is shown.
             if (!gameObject.activeInHierarchy) return;
-
+ 
             if (waitingTemplate == null || assignedTemplate == null || orderButton == null || orderButtonText == null || waitingContent == null || buildingContent == null)
             { Debug.LogError("PrisonPanelView has an empty Inspector slot."); return; }
-
+ 
             if (!setUp)
             {
                 setUp = true;
             }
-
+ 
             // Only rebuild the rows when something changed.
             if (dirty || prison.version != shownVersion || shownWorkplace != game.SelectedWorkplace)
             {
@@ -63,10 +71,10 @@ namespace COMP2165.Clicker
                 dirty = false;
                 shownVersion = prison.version;
             }
-
+ 
             UpdateTexts();
         }
-
+ 
         void OrderClicked()
         {
             if (game == null || prison == null) { Debug.LogWarning("Order clicked before the game was ready."); return; }
@@ -75,25 +83,34 @@ namespace COMP2165.Clicker
             Debug.Log("Order prisoner: cost " + cost + ", paid " + paid);
             if (paid) prison.OrderPrisoner();
         }
-
+ 
         void Rebuild()
         {
             for (int i = 0; i < rows.Count; i++) Destroy(rows[i]);
             rows.Clear();
             headerPlaces.Clear();
             headerRows.Clear();
-
+ 
             // Waiting prisoners. The SELECT button picks one (click it again to un-pick).
             // Then click a building on the map to assign them.
+            // If an empty slot is waiting, the button says ASSIGN and fills that slot instead.
             for (int i = 0; i < prison.unassigned.Count; i++)
             {
                 Prisoner p = prison.unassigned[i];
                 ClickerShopRow row = AddRow(waitingTemplate, waitingContent);
                 ShowPrisoner(row, p);
-                row.actionText.text = (p == game.SelectedPrisoner) ? "SELECTED" : "SELECT";
-                row.action.onClick.AddListener(() => { game.SelectedPrisoner = (game.SelectedPrisoner == p) ? null : p; dirty = true; });
+                if (pendingPlace != null)
+                {
+                    row.actionText.text = "ASSIGN";
+                    row.action.onClick.AddListener(() => AssignToPending(p));
+                }
+                else
+                {
+                    row.actionText.text = (p == game.SelectedPrisoner) ? "SELECTED" : "SELECT";
+                    row.action.onClick.AddListener(() => { game.SelectedPrisoner = (game.SelectedPrisoner == p) ? null : p; dirty = true; });
+                }
             }
-
+ 
             // The building clicked on the map, followed by the prisoners working in it.
             Workplace place = game.SelectedWorkplace;
             shownWorkplace = place;
@@ -107,13 +124,12 @@ namespace COMP2165.Clicker
                 hint.title.text = "Click a building on the map to see who works there.";
                 return;
             }
-
-            // The SELL button asks the map to sell this building.
-            // Two buttons stacked on the right: ASSIGN puts the selected prisoner here, DEMOLISH asks the map to sell it.
+ 
+            // Two buttons stacked on the right: REPAIR and DEMOLISH.
             ClickerShopRow header = AddRow(assignedTemplate, buildingContent, 150f);
             header.icon.texture = game.BuildingIcon(place.typeId);
             header.icon.color = Color.white;
-
+ 
             Button repairButton = header.action;
             Text repairText = header.actionText;
             Button demolishButton = Instantiate(repairButton, repairButton.transform.parent);   // a copy of the same button
@@ -123,10 +139,10 @@ namespace COMP2165.Clicker
             demolishText.text = "DEMOLISH";
             repairButton.onClick.AddListener(() => game.RepairSelected());
             demolishButton.onClick.AddListener(() => game.AskSellSelected());
-
+ 
             headerPlaces.Add(place);
             headerRows.Add(header);
-
+ 
             // The REMOVE button sends a worker back to the waiting list.
             for (int j = 0; j < place.workers.Count; j++)
             {
@@ -136,15 +152,49 @@ namespace COMP2165.Clicker
                 workerRow.actionText.text = "REMOVE";
                 workerRow.action.onClick.AddListener(() => { prison.Unassign(worker, place); });
             }
+ 
+            // One row per empty spot. ASSIGN opens the prisoner list to fill it.
+            for (int k = place.workers.Count; k < place.capacity; k++)
+            {
+                ClickerShopRow emptyRow = AddRow(assignedTemplate, buildingContent);
+                emptyRow.icon.texture = null;
+                emptyRow.icon.color = new Color(1f, 1f, 1f, 0.15f);   // faint placeholder square
+                emptyRow.title.text = "Empty slot\nNeeds " + place.mainStat;
+                emptyRow.actionText.text = "ASSIGN";
+                emptyRow.action.onClick.AddListener(() => PickForSlot(place));
+            }
         }
-
+ 
+        // Empty slot clicked: remember the building and open the prisoner list
+        void PickForSlot(Workplace place)
+        {
+            pendingPlace = place;
+            game.SelectedPrisoner = null;
+            dirty = true;
+            if (prison.unassigned.Count == 0) game.Notify("No prisoners waiting. Order one first.");
+            else game.Notify("Pick a prisoner for " + place.name + ".");
+            if (tabs != null) tabs.Show(prisonersPage);
+        }
+ 
+        // Prisoner picked: put them in the building and go back to it
+        void AssignToPending(Prisoner p)
+        {
+            Workplace place = pendingPlace;
+            pendingPlace = null;
+            dirty = true;
+            if (place == null) return;
+            if (!prison.Assign(p, place)) { game.Notify(place.name + " is full."); return; }
+            game.SelectedWorkplace = place;
+            if (tabs != null) tabs.Show(buildingInfoPage);
+        }
+ 
         void AssignHere(Workplace place)
         {
             if (game.SelectedPrisoner == null) return;
             if (prison.Assign(game.SelectedPrisoner, place)) game.SelectedPrisoner = null;   // false means the building is full
             dirty = true;
         }
-
+ 
         // Puts a button x, y pixels from the top-left of its row, and fits its label inside it
         static void PlaceButton(Button button, Text label, float x, float y, float width, float height)
         {
@@ -154,7 +204,7 @@ namespace COMP2165.Clicker
             label.rectTransform.anchoredPosition = new Vector2(4f, -3f);
             label.rectTransform.sizeDelta = new Vector2(width - 8f, height - 6f);
         }
-
+ 
         // Copies the row template into a list and gives it the shop's compact layout.
         ClickerShopRow AddRow(ClickerShopRow template, RectTransform parent, float height = 88f)
         {
@@ -173,7 +223,7 @@ namespace COMP2165.Clicker
             rows.Add(row.gameObject);
             return row;
         }
-
+ 
         // Shows a prisoner: the icon is a square in their faction colour, the name is their faction.
         void ShowPrisoner(ClickerShopRow row, Prisoner p)
         {
@@ -181,17 +231,15 @@ namespace COMP2165.Clicker
             row.icon.texture = sprite;
             row.icon.color = sprite != null ? Color.white : FactionColor(p.faction);
             row.title.text = p.Label() + "  " + p.faction + "\nSTR " + p.strength + "  AGI " + p.agility + "\nINT " + p.intellect + "\nCrime: " + p.crime;
-            //row.tooltip = game.Tooltip;
-            //row.tooltipText = p.Label() + "\n" + p.faction + "\nCrime: " + p.crime;
         }
-
+ 
         static string SpriteKey(Faction f)
         {
             if (f == Faction.Republic) return "rep";
             if (f == Faction.Imperium) return "imp";
             return "fed";
         }
-
+ 
         // Numbers that change every second (production, tension) are updated here without rebuilding.
         void UpdateTexts()
         {
@@ -220,11 +268,11 @@ namespace COMP2165.Clicker
                     row.action.interactable = game.CanAffordRepair(p.typeId, missing);
                 }
             }
-
+ 
             float cost = prison.PrisonerCost();
             orderButtonText.text = "ORDER PRISONER (" + cost.ToString("0") + ")";
             orderButton.interactable = game.Supplies() >= cost;
-
+ 
             if (summaryText != null)
             {
                 summaryText.text = "Waiting: " + prison.unassigned.Count
@@ -232,7 +280,7 @@ namespace COMP2165.Clicker
                     + "   Production: +" + prison.TotalSuppliesPerSecond().ToString("0.0") + "/s";
             }
         }
-
+ 
         static Color FactionColor(Faction f)
         {
             if (f == Faction.Republic) return new Color(0.3f, 0.5f, 0.9f);    // blue
