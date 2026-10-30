@@ -6,7 +6,7 @@ click_label,SUPPLIES
 building_cost_growth_percent,15
 sell_refund_percent,50
 shop_reveal_percent,0
-gold_multiplier,3
+gold_multiplier,2
 bonus_duration_seconds,20
 gold_interval_seconds,50
 event_interval_seconds,35
